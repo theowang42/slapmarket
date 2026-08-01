@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>US Market Pulse</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='4' fill='%230b0c0e'/><path d='M3 11l3-4 3 2 4-6' stroke='%232fbf7f' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="bar">
+      <div class="bar-left">
+        <span class="wordmark">US MARKET<span class="wordmark-dim"> PULSE</span></span>
+        <span class="pill" id="session"><i class="dot"></i><span class="pill-label">连接中</span></span>
+        <span class="et" id="et"></span>
+      </div>
+      <div class="bar-right">
+        <div class="breadth" id="breadth" title="成分股涨跌家数"></div>
+        <span class="meta" id="meta">加载中…</span>
+      </div>
+    </header>
+
+    <section class="indices" id="indices"></section>
+
+    <main class="main">
+      <section class="panel heat-panel">
+        <div class="panel-head">
+          <h2>板块热力图</h2>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div class="heat" id="heat"></div>
+      </section>
+
+      <aside class="side">
+        <section class="panel">
+          <div class="panel-head"><h2>板块排行</h2><span class="hint">SPDR 行业 ETF</span></div>
+          <div class="sectors" id="sectors"></div>
+        </section>
+        <section class="panel side-panel movers-panel">
+          <div class="panel-head"><h2>今日异动</h2><span class="hint">全部成分股</span></div>
+          <div class="movers" id="movers"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-head"><h2>自选</h2><span class="hint">config.js</span></div>
+          <div class="watch" id="watch"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <div class="tip" id="tip" hidden></div>
+  <div class="toast" id="toast" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
