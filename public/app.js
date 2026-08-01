@@ -198,21 +198,43 @@ const MIN_CELLS = 2;
 const measureCtx = document.createElement('canvas').getContext('2d');
 const widthCache = new Map();
 
-/** 代码在 100px 字号下实际有多宽。量一次存起来。 */
-function symbolWidth100(symbol) {
-  let w = widthCache.get(symbol);
+/** 文字在 100px 字号下实际有多宽。量一次存起来。代码用无衬线，涨跌幅用等宽。 */
+function width100(text, mono = false) {
+  const key = (mono ? 'm:' : 's:') + text;
+  let w = widthCache.get(key);
   if (w == null) {
-    measureCtx.font = `600 100px ${getComputedStyle(document.body).fontFamily}`;
-    w = measureCtx.measureText(symbol).width;
-    widthCache.set(symbol, w);
+    const css = getComputedStyle(document.body);
+    measureCtx.font = mono
+      ? `100px ${css.getPropertyValue('--mono')}`
+      : `600 100px ${css.fontFamily}`;
+    w = measureCtx.measureText(text).width;
+    widthCache.set(key, w);
   }
   return w;
 }
 
-/** 在给定格子里代码能用的字号；放不下返回 0。 */
+/** 字号上限。只有最大的那几只能到这个数。 */
+const MAX_FONT = 20;
+/** 涨跌幅那行的可读下限。比这还小就干脆不写，写了也看不清，只添乱。 */
+const MIN_PCT_FONT = 7.5;
+
+/**
+ * 这个格子"该"用多大的字——按面积开一个缓和的幂次。
+ *
+ * 只用"放得下"来定字号是不行的：小格子横向也放得下 17px，
+ * 于是 AMGN 和 LLY 字一样大，图上就没有层次了。
+ * 面积每翻一倍，字号只涨约 13%，所以大格子明显大、小格子明显小，又不会悬殊。
+ */
+const targetFontSize = (cw, ch) => Math.min(MAX_FONT, 2.7 * (cw * ch) ** 0.18);
+
+/** 在给定格子里代码实际能用的字号；放不下返回 0。 */
 function symbolFontSize(symbol, cw, ch) {
   if (cw < MIN_W || ch < MIN_H) return 0;
-  const fs = Math.min(17, ((cw - 5) * 100) / symbolWidth100(symbol), (ch - 3) / 1.15);
+  const fs = Math.min(
+    targetFontSize(cw, ch),                      // 该多大
+    ((cw - 5) * 100) / width100(symbol),         // 横向放得下多大
+    (ch - 3) / 1.15,                             // 纵向放得下多大
+  );
   return fs >= MIN_FONT ? fs : 0;
 }
 
@@ -271,12 +293,17 @@ function renderHeat(d) {
     const cellHtml = cells.map(({ item: { q }, x, y, w, h }) => {
       const cw = w - 1, ch = h - 1;
       const fs = symbolFontSize(q.symbol, cw, ch) || MIN_FONT;
-      const showPct = cw > 44 && ch >= fs * 2.1;
+      // 涨跌幅要两行放得开、而且它自己也得横向放得下（"-15.32%" 比代码还长）
+      const pct = fmtPct(q.pct);
+      const pctFs = fs * 0.68;
+      const showPct = pctFs >= MIN_PCT_FONT
+        && ch >= fs * 2.3
+        && cw - 5 >= (width100(pct, true) * pctFs) / 100;
       return `<div class="cell${cw < 44 ? ' tiny' : ''}" data-sym="${q.symbol}"
         style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;width:${cw.toFixed(1)}px;height:${ch.toFixed(1)}px;
         background:${heat(q.pct, clamp)};color:${heatText(q.pct, clamp)}"
         ><b style="font-size:${fs.toFixed(1)}px">${q.symbol}</b>${
-        showPct ? `<i style="font-size:${(fs * 0.68).toFixed(1)}px">${fmtPct(q.pct)}</i>` : ''}</div>`;
+        showPct ? `<i style="font-size:${pctFs.toFixed(1)}px">${pct}</i>` : ''}</div>`;
     }).join('');
 
     // 板块名放不下就只留名字不写涨跌，别让它折行
