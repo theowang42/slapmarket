@@ -42,6 +42,15 @@ body {
   padding: 14px 18px 16px;
 }
 
+/* 视图挂载点。撑满顶栏之外的高度，视图内部的 flex:1（如 .main）才有得撑。 */
+#view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -79,13 +88,16 @@ body {
   flex-wrap: wrap;
 }
 
-.bar-left, .bar-right { display: flex; align-items: center; gap: 12px; }
+/* 窄屏上导航把状态药丸挤出可视区，所以这里也要能换行 */
+.bar-left, .bar-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 .wordmark {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: .16em;
   color: var(--text);
+  white-space: nowrap;
+  flex: none;
 }
 .wordmark-dim { color: var(--text-3); font-weight: 400; }
 
@@ -99,6 +111,9 @@ body {
   font-size: 11px;
   color: var(--text-2);
   background: var(--panel);
+  /* 不加这两条，窄屏上导航一挤，"休市 · 周末" 会被压成竖排一列 */
+  white-space: nowrap;
+  flex: none;
 }
 
 .dot {
@@ -307,7 +322,57 @@ body {
   padding: 4px 8px;
   border-radius: 6px;
 }
+.wrow.is-editing { grid-template-columns: 16px 1fr auto auto; }
 .wrow:hover { background: rgba(255, 255, 255, .035); }
+
+/* ── 自选编辑 ───────────────────────────────────────────────── */
+.watch-edit {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text-3);
+  font-size: 10.5px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.watch-edit:hover { color: var(--text-2); background: rgba(255, 255, 255, .05); }
+.watch-edit.on { color: var(--text); background: var(--panel-2); border-color: var(--line-strong); }
+
+.wrow-del {
+  align-self: center;
+  width: 15px; height: 15px;
+  padding: 0; line-height: 1;
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--text-3);
+  font-size: 12px;
+  cursor: pointer;
+}
+.wrow-del:hover { color: var(--down); border-color: var(--down); }
+
+/* 吸在面板底部：自选多到要滚动时，输入框还得够得着 */
+.watch-add {
+  position: sticky;
+  bottom: -7px;
+  background: var(--panel);
+  padding: 6px 8px 8px;
+}
+.watch-add input {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.watch-add input::placeholder { color: var(--text-3); text-transform: none; letter-spacing: 0; font-family: var(--sans); }
+.watch-add input:focus { outline: none; border-color: var(--line-strong); background: var(--bg); }
+.watch-add input:disabled { opacity: .5; }
 .wrow-sym { font-size: 11.5px; font-weight: 500; letter-spacing: .02em; }
 .wrow-px { font-size: 11.5px; color: var(--text-2); }
 .wrow-pct { font-size: 11.5px; width: 54px; text-align: right; }
@@ -345,6 +410,282 @@ body {
   z-index: 60;
 }
 
+/* ── 顶栏导航 ───────────────────────────────────────────────── */
+.nav { display: flex; gap: 2px; flex: none; }
+.nav a {
+  color: var(--text-3);
+  text-decoration: none;
+  font-size: 11.5px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  white-space: nowrap;      /* 窄屏上"总览"会被折成两行 */
+}
+.nav a:hover { color: var(--text-2); background: rgba(255, 255, 255, .04); }
+.nav a.on { color: var(--text); background: var(--panel-2); border-color: var(--line-strong); }
+
+/* ── 市场宽度 ───────────────────────────────────────────────── */
+.bd-top { flex: none; }
+.bd-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); }
+.bd-stat {
+  background: var(--panel);
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 11px 14px;
+}
+.bd-k { font-size: 10.5px; color: var(--text-3); }
+.bd-v { font-size: 20px; font-weight: 600; }
+.bd-v i { font-style: normal; color: var(--text-3); font-weight: 400; margin: 0 2px; }
+.bd-sub { font-size: 10.5px; color: var(--text-3); }
+.bd-gap .bd-sub { color: var(--text-2); }
+
+/* 上下排而不是左右排：直方图要宽（20 个桶挤在半屏里看不出形状），
+   离散度也是宽行的形状——11 行放进整屏高度只会剩一大片空白 */
+.bd-main {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.hist { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 14px 8px; }
+.hist-bars { flex: 1; min-height: 0; display: flex; align-items: flex-end; gap: 2px; }
+.hist-bar { flex: 1; min-height: 1px; border-radius: 2px 2px 0 0; opacity: .82; }
+.hist-bar:hover { opacity: 1; }
+.hist-bar.up { background: var(--up); }
+.hist-bar.down { background: var(--down); }
+.hist-axis {
+  display: flex; justify-content: space-between;
+  margin-top: 7px; padding-top: 7px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 10px; color: var(--text-3);
+}
+.hist-zero { color: var(--text-2); }
+
+.disp { overflow-y: auto; padding: 6px 14px 10px; }
+.disp-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 60px 52px;
+  align-items: center; gap: 12px;
+  padding: 5px 4px;
+}
+.disp-row:hover { background: rgba(255, 255, 255, .03); border-radius: 5px; }
+.disp-name { font-size: 11.5px; white-space: nowrap; }
+.disp-track { position: relative; height: 16px; }
+/* 零轴。板块的全距横跨零轴时，一眼看出内部是不是有涨有跌 */
+.disp-zero {
+  position: absolute; left: 50%; top: 1px; bottom: 1px;
+  width: 1px; background: var(--line-strong);
+}
+.disp-span {
+  position: absolute; top: 50%; height: 4px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .16);
+}
+.disp-mid {
+  position: absolute; top: 50%; width: 3px; height: 12px;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+}
+.disp-mid.up { background: var(--up); }
+.disp-mid.down { background: var(--down); }
+.disp-mid.flat { background: var(--text-2); }
+.disp-mid-v { font-size: 11px; text-align: right; }
+.disp-n { font-size: 10px; color: var(--text-3); text-align: right; }
+
+/* ── 宏观 ───────────────────────────────────────────────────── */
+.macro {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 12px;
+}
+.macro-group { min-height: 0; }
+/* 每组只有 3~4 行。面板撑满高度、行在里面均匀铺开，
+   比"面板按内容收、整页下半截空着"好看，也让分时线有地方伸展 */
+.macro-rows {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; justify-content: space-evenly;
+  padding: 2px 12px 8px;
+}
+.macro-row {
+  display: grid;
+  grid-template-columns: 88px 92px 72px minmax(0, 1fr);
+  align-items: center; gap: 14px;
+  padding: 6px 5px;
+  border-radius: 5px;
+}
+.macro-row:hover { background: rgba(255, 255, 255, .035); }
+.macro-name { font-size: 11.5px; white-space: nowrap; }
+.macro-last { font-size: 13px; font-weight: 600; text-align: right; }
+.macro-last em { font-style: normal; font-size: 9.5px; color: var(--text-3); margin-left: 1px; }
+.macro-chg { font-size: 11.5px; text-align: right; }
+/* 表格行里的分时线：规规矩矩待在自己那一列，不像指数卡那样出血 */
+.macro-spark { display: block; width: 100%; height: 34px; opacity: .9; }
+
+/* ── 财报日历 ───────────────────────────────────────────────── */
+.cal-panel { flex: 1; min-height: 0; }
+.cal { overflow-y: auto; padding: 4px 10px 12px; }
+.cal-empty { padding: 28px 12px; color: var(--text-3); font-size: 12px; text-align: center; }
+
+.cal-day { margin-top: 10px; }
+.cal-day:first-child { margin-top: 2px; }
+.cal-date {
+  display: flex; align-items: baseline; gap: 9px;
+  padding: 5px 6px 6px;
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0;
+  background: var(--panel);
+}
+.cal-date b { font-size: 12px; font-weight: 600; }
+.cal-date span { font-size: 10px; color: var(--text-3); font-family: var(--mono); }
+.cal-date.is-today b { color: var(--up); }
+
+/* 公司名吃掉中间的弹性空间。留一大片空白的话，视线从代码扫到右边的数字会跟丢行 */
+.cal-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 84px 76px 74px 74px 64px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.cal-row:hover { background: rgba(255, 255, 255, .035); }
+.cal-sym { font-size: 11.5px; font-weight: 500; }
+.cal-name { font-size: 11px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-sec { font-size: 10px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-when { font-size: 10px; color: var(--text-2); display: flex; align-items: center; gap: 5px; }
+.cal-est {
+  font-style: normal; font-size: 9px; color: var(--text-3);
+  border: 1px solid var(--line-strong); border-radius: 4px; padding: 0 3px;
+}
+.cal-cap, .cal-px { font-size: 11px; color: var(--text-2); text-align: right; }
+.cal-pct { font-size: 11.5px; text-align: right; }
+
+/* ── 个股页 ─────────────────────────────────────────────────── */
+.sym-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "back id px" "back flags flags";
+  align-items: center;
+  gap: 2px 14px;
+  padding: 11px 14px;
+}
+.sym-back {
+  grid-area: back;
+  width: 30px; height: 30px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 15px;
+  cursor: pointer;
+}
+.sym-back:hover { color: var(--text); border-color: var(--line-strong); }
+
+.sym-id { grid-area: id; min-width: 0; }
+.sym-code { font-size: 17px; font-weight: 600; letter-spacing: .01em; display: flex; align-items: baseline; gap: 8px; }
+.sym-ex { font-size: 9.5px; color: var(--text-3); font-family: var(--mono); letter-spacing: .04em; }
+.sym-name {
+  font-size: 11.5px; color: var(--text-2); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.sym-px { grid-area: px; display: flex; align-items: baseline; gap: 10px; }
+.sym-last { font-size: 22px; font-weight: 600; }
+.sym-chg { font-size: 12.5px; }
+.sym-ext { font-size: 10.5px; color: var(--text-3); }
+
+.sym-flags { grid-area: flags; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.sym-flags:empty { display: none; }
+.flag {
+  font-size: 10px; color: var(--text-2);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+.flag.up { color: var(--up); border-color: color-mix(in srgb, var(--up) 35%, transparent); }
+.flag.down { color: var(--down); border-color: color-mix(in srgb, var(--down) 35%, transparent); }
+.flag.warn { color: #e8b339; border-color: rgba(232, 179, 57, .35); }
+
+.sym-main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 292px;
+  gap: 12px;
+}
+.sym-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.sym-side > .panel { min-height: 78px; }
+.sym-side > .panel:nth-child(1) { flex: none; }
+.sym-side > .panel:nth-child(2) { flex: none; }
+.sym-side > .peers-panel { flex: 1 1 0; min-height: 90px; }
+
+.chart-panel { min-height: 0; }
+.chart-wrap { flex: 1; min-height: 0; margin: 4px 8px 8px; }
+.chart-wrap canvas { width: 100%; height: 100%; display: block; }
+
+.ranges { display: flex; gap: 2px; }
+.ranges button {
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  color: var(--text-3); font-family: var(--mono); font-size: 10.5px;
+  padding: 3px 7px; cursor: pointer;
+}
+.ranges button:hover { color: var(--text-2); background: rgba(255, 255, 255, .04); }
+.ranges button.on { color: var(--text); background: var(--panel-2); border-color: var(--line-strong); }
+
+#readout { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#readout b { color: var(--text); font-weight: 600; }
+
+/* 指标：两列 键/值 成对排 */
+.kv {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  gap: 5px 8px;
+  padding: 8px 12px 12px;
+}
+.kv-k { font-size: 10.5px; color: var(--text-3); align-self: center; }
+.kv-v { font-size: 11.5px; text-align: right; }
+
+.r52 { padding: 10px 12px 12px; }
+.r52-track {
+  position: relative; height: 5px; border-radius: 3px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--down) 45%, transparent), var(--text-3), color-mix(in srgb, var(--up) 45%, transparent));
+}
+.r52-mark {
+  position: absolute; top: 50%; width: 3px; height: 13px;
+  border-radius: 2px; background: var(--text);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 2px var(--panel);
+}
+.r52-ends { display: flex; justify-content: space-between; margin-top: 9px; }
+.r52-ends span { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; }
+.r52-ends .r52-right { text-align: right; }
+.r52-ends em { font-style: normal; font-size: 9.5px; color: var(--text-3); font-family: var(--mono); }
+
+.peers { overflow-y: auto; padding: 2px 6px 6px; }
+.peer {
+  display: grid;
+  grid-template-columns: 62px 1fr 52px;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.peer:hover { background: rgba(255, 255, 255, .035); }
+.peer.is-self { background: rgba(255, 255, 255, .06); }
+.peer.is-self .peer-sym { color: var(--text); font-weight: 600; }
+.peer-sym { font-size: 11.5px; color: var(--text-2); }
+.peer-pct { font-size: 11.5px; text-align: right; }
+
+/* 下钻入口：能点的地方给出手势 */
+.cell, .mrow, .wrow, .idx { cursor: pointer; }
+.idx:hover { border-color: var(--line-strong); }
+
 /* ── 载入动效：克制，只做一次淡入 ──────────────────────────── */
 .fade-in { animation: fade .45s ease both; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -355,7 +696,7 @@ body {
 
 /* ── 窄屏 ───────────────────────────────────────────────────── */
 @media (max-width: 1180px) {
-  .main { grid-template-columns: minmax(0, 1fr) 250px; }
+  .main, .sym-main { grid-template-columns: minmax(0, 1fr) 250px; }
   .indices { grid-template-columns: repeat(3, 1fr); }
   .indices > :nth-child(n+4) { grid-column: span 1; }
 }
@@ -364,7 +705,24 @@ body {
   body { overflow: auto; }
   .app { height: auto; min-height: 100dvh; }
   .indices { grid-template-columns: repeat(2, 1fr); }
-  .main { grid-template-columns: 1fr; }
+  .main, .sym-main { grid-template-columns: 1fr; }
   .heat-panel { height: 62vh; }
   .side > .panel { flex: none; }
+  .chart-panel { height: 46vh; }
+  .sym-side > .peers-panel { flex: none; max-height: 40vh; }
+  .kv { grid-template-columns: 1fr auto; }
+  /* 窄屏砍掉公司名、板块、现价，只留代码、盘前盘后、市值、涨跌 */
+  .cal-row { grid-template-columns: 68px 1fr 66px 58px; }
+  .cal-name, .cal-sec, .cal-px { display: none; }
+
+  .bd-stats { grid-template-columns: repeat(2, 1fr); }
+  .macro { grid-template-columns: 1fr; }
+  .bd-main { grid-template-rows: none; }
+  .bd-main > .panel { min-height: 46vh; }
+  .macro-row { grid-template-columns: 84px 1fr 74px; }
+  .macro-spark { display: none; }
+}
+
+@media (max-width: 1180px) {
+  .bd-stats { grid-template-columns: repeat(2, 1fr); }
 }

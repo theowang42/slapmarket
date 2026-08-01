@@ -1,2 +1,7 @@
 node_modules/
 .DS_Store
+
+# 自选股是运行时状态，不是源码——每改一次都提交会让仓库一直是脏的。
+# 初始名单在 config.js 的 WATCHLIST 里。
+# （data/holdings.json 相反，它要提交：首次启动、SSGA 又连不上时的兜底。）
+data/watchlist.json

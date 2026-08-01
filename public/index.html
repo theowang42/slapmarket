@@ -12,6 +12,7 @@
     <header class="bar">
       <div class="bar-left">
         <span class="wordmark">US MARKET<span class="wordmark-dim"> PULSE</span></span>
+        <nav class="nav" id="nav"></nav>
         <span class="pill" id="session"><i class="dot"></i><span class="pill-label">连接中</span></span>
         <span class="et" id="et"></span>
       </div>
@@ -21,32 +22,8 @@
       </div>
     </header>
 
-    <section class="indices" id="indices"></section>
-
-    <main class="main">
-      <section class="panel heat-panel">
-        <div class="panel-head">
-          <h2>板块热力图</h2>
-          <div class="legend" id="legend"></div>
-        </div>
-        <div class="heat" id="heat"></div>
-      </section>
-
-      <aside class="side">
-        <section class="panel">
-          <div class="panel-head"><h2>板块排行</h2><span class="hint">SPDR 行业 ETF</span></div>
-          <div class="sectors" id="sectors"></div>
-        </section>
-        <section class="panel side-panel movers-panel">
-          <div class="panel-head"><h2>今日异动</h2><span class="hint">全部成分股</span></div>
-          <div class="movers" id="movers"></div>
-        </section>
-        <section class="panel">
-          <div class="panel-head"><h2>自选</h2><span class="hint">config.js</span></div>
-          <div class="watch" id="watch"></div>
-        </section>
-      </aside>
-    </main>
+    <!-- 视图挂载点。路由只换这里，顶栏常驻。 -->
+    <div id="view"></div>
   </div>
 
   <div class="tip" id="tip" hidden></div>

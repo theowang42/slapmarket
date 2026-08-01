@@ -4,7 +4,13 @@
 // 指数前面带点（.SPX）。
 // ─────────────────────────────────────────────────────────────
 
-/** 自选股：想看哪些写哪些，顺序即展示顺序。 */
+/**
+ * 自选股的**初始值**。
+ *
+ * 平时不用改这里——页面上自选面板右上角点「编辑」就能增删，改动存在
+ * `data/watchlist.json`。这份名单只在那个文件还不存在时用一次。
+ * 想推倒重来：删掉 data/watchlist.json，重启即回到这里的名单。
+ */
 export const WATCHLIST = [
   'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO',
 ];
@@ -44,6 +50,45 @@ export const SECTORS = [
 ];
 
 /**
+ * 宏观页。分组显示，走的还是同一个报价接口。
+ *
+ * bp: true —— 这一组是**收益率**，涨跌要按基点（bp）算，不能按百分比。
+ *     10 年期从 4.660 涨到 4.718，接口给的 change_pct 是 +1.18%，
+ *     但看债的人只认 "+5.8bp"。显示成百分比是错的。
+ */
+export const MACRO = [
+  {
+    key: 'rates', name: '美债收益率', bp: true, items: [
+      { symbol: 'US2Y', name: '2 年' },
+      { symbol: 'US5Y', name: '5 年' },
+      { symbol: 'US10Y', name: '10 年' },
+      { symbol: 'US30Y', name: '30 年' },
+    ],
+  },
+  {
+    key: 'commodity', name: '商品', items: [
+      { symbol: '@CL.1', name: 'WTI 原油' },
+      { symbol: '@GC.1', name: '黄金' },
+      { symbol: '@SI.1', name: '白银' },
+      { symbol: '@NG.1', name: '天然气' },
+    ],
+  },
+  {
+    key: 'fx', name: '美元 / 汇率', items: [
+      { symbol: '.DXY', name: '美元指数' },
+      { symbol: 'EUR=', name: '欧元 / 美元' },
+      { symbol: 'JPY=', name: '美元 / 日元' },
+    ],
+  },
+  {
+    key: 'crypto', name: '加密', items: [
+      { symbol: 'BTC=', name: '比特币' },
+      { symbol: 'ETH=', name: '以太坊' },
+    ],
+  },
+];
+
+/**
  * 每个板块画多少只。按权重从大到小累加，覆盖到 coverage 就停，
  * 再用 min/max 夹住。集中度高的板块自然少画几只，分散的多画几只。
  * 想让图更密就调高 coverage 或 max。
@@ -53,6 +98,15 @@ export const HOLDINGS_PICK = { coverage: 0.85, min: 5, max: 18 };
 /** 持仓缓存多久刷一次（小时）。持仓一天只变一次，12 小时足够。 */
 export const HOLDINGS_TTL_HOURS = 12;
 
+/**
+ * 一次性休市日。**常规节假日不用写这里**——元旦、感恩节、耶稣受难日这些
+ * 全是规则性的，`lib/market-calendar.js` 按规则算，不会过期。
+ *
+ * 这里只放规则算不出来的：国丧闭市、飓风停市之类。比如卡特总统葬礼那天：
+ *   '2025-01-09': '卡特总统国葬'
+ */
+export const MARKET_CLOSURES = {};
+
 /** 热力图配色的饱和上限（百分比）。±3% 到最深，日内看着对比最舒服。 */
 export const HEAT_CLAMP = 3;
 
@@ -60,3 +114,13 @@ export const HEAT_CLAMP = 3;
 export const CACHE_TTL = { quotes: 60, charts: 180 };
 
 export const PORT = process.env.PORT || 5173;
+
+/**
+ * 监听地址。默认只绑本机回环，同一个 WiFi 下的其他人连不上。
+ *
+ * 这不是洁癖：`POST /api/watchlist` 是个**没有鉴权的写接口**，
+ * 绑到 0.0.0.0 就等于把"改我的自选"这个操作开放给整个局域网。
+ *
+ * 确实要在手机上看，就 `HOST=0.0.0.0 npm start`——但只在你信得过的网络里这么做。
+ */
+export const HOST = process.env.HOST || '127.0.0.1';
