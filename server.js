@@ -2,7 +2,11 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { WATCHLIST, INDICES, SECTORS, HEAT_CLAMP, CACHE_TTL, PORT } from './config.js';
+import {
+  WATCHLIST, INDICES, SECTORS, HEAT_CLAMP, CACHE_TTL, PORT,
+  HOLDINGS_PICK, HOLDINGS_TTL_HOURS,
+} from './config.js';
+import { getHoldings } from './lib/holdings.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
@@ -103,19 +107,33 @@ function cached(key, ttlSec, producer) {
 }
 
 // ── 组装 ──────────────────────────────────────────────────────────
-async function buildQuotes() {
+async function buildQuotes({ force = false } = {}) {
+  // 成分股来自 SSGA 官方每日持仓，不再是写死的名单
+  const { holdings, meta } = await getHoldings(SECTORS, {
+    ttlHours: HOLDINGS_TTL_HOURS,
+    pickOpts: HOLDINGS_PICK,
+    force,
+  });
+
   const symbols = new Set([...WATCHLIST, ...INDICES.map((i) => i.symbol)]);
-  for (const s of SECTORS) { symbols.add(s.etf); for (const t of s.stocks) symbols.add(t); }
+  for (const s of SECTORS) {
+    symbols.add(s.etf);
+    for (const h of holdings[s.etf] ?? []) symbols.add(h.symbol);
+  }
   const q = await fetchQuotes([...symbols]);
 
   // config 里的 name/invert 优先，别被行情源的官方长名覆盖
   const indices = INDICES.map((i) => (q[i.symbol] ? { ...q[i.symbol], ...i } : null)).filter(Boolean);
 
   const sectors = SECTORS.map((s) => {
-    const stocks = s.stocks
-      .map((sym) => q[sym])
-      .filter((x) => x && x.cap)
-      .map((x) => ({ symbol: x.symbol, name: x.name, last: x.last, pct: x.pct, cap: x.cap }))
+    const stocks = (holdings[s.etf] ?? [])
+      .map((h) => {
+        const x = q[h.symbol];
+        return x && x.cap
+          ? { symbol: x.symbol, name: x.name, last: x.last, pct: x.pct, cap: x.cap, weight: h.weight, pinned: h.pinned }
+          : null;
+      })
+      .filter(Boolean)
       .sort((a, b) => b.cap - a.cap);
     const cap = stocks.reduce((a, b) => a + b.cap, 0);
     const etf = q[s.etf];
@@ -133,7 +151,7 @@ async function buildQuotes() {
     total: all.length,
   };
 
-  return { indices, sectors, watchlist, breadth, quoteStatus: indices[0]?.status ?? null };
+  return { indices, sectors, watchlist, breadth, holdingsMeta: meta, quoteStatus: indices[0]?.status ?? null };
 }
 
 async function buildSparks() {
@@ -171,10 +189,11 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
   if (url.pathname === '/api/overview') {
-    if (url.searchParams.has('force')) cache.clear();
+    const force = url.searchParams.has('force');
+    if (force) cache.clear();
     try {
       const [q, sparks] = await Promise.all([
-        cached('quotes', CACHE_TTL.quotes, buildQuotes),
+        cached('quotes', CACHE_TTL.quotes, () => buildQuotes({ force })),
         cached('charts', CACHE_TTL.charts, buildSparks),
       ]);
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });

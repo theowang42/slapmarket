@@ -183,6 +183,8 @@ function renderLegend(clamp) {
 
 // ── 热力图 ────────────────────────────────────────────────────
 const LABEL_H = 17;
+/** 每个格子至少要占这么多像素才画出来，否则小板块会糊成噪点。 */
+const MIN_CELL_AREA = 2400;
 
 function renderHeat(d) {
   const host = $('heat');
@@ -200,7 +202,12 @@ function renderHeat(d) {
     if (bw < 8 || bh < 8) continue;
     const showLabel = bh > 40 && bw > 52;
     const inner = { x: 0, y: showLabel ? LABEL_H : 0, w: bw, h: bh - (showLabel ? LABEL_H : 0) };
-    const cells = squarify(s.stocks.map((q) => ({ value: q.cap, q })), inner);
+
+    // 板块框有多大就画多少只：平均每格至少留出 MIN_CELL_AREA，
+    // 否则小板块会被十几只小票糊成一片噪点。stocks 已按市值降序，直接截断。
+    const room = Math.max(4, Math.floor((inner.w * inner.h) / MIN_CELL_AREA));
+    const drawn = s.stocks.slice(0, room);
+    const cells = squarify(drawn.map((q) => ({ value: q.cap, q })), inner);
 
     const cellHtml = cells.map(({ item, x, y, w, h }) => {
       const q = item.q;
@@ -242,6 +249,7 @@ function showTip(sym, ev) {
       <span>涨跌</span><b class="${cls}">${fmtPct(q.pct)}</b>
       <span>市值</span><b>${fmtCap(q.cap)}</b>
       <span>板块</span><b>${q.sector}</b>
+      <span>来源</span><b>${q.pinned ? 'config 固定' : 'ETF 持仓'}</b>
     </div>`;
   tip.hidden = false;
   moveTip(ev);
