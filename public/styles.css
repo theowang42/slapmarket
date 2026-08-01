@@ -367,3 +367,12 @@ body {
   .heat-panel { height: 62vh; }
   .side > .panel { flex: none; }
 }
+
+/* 没画出来的成分股汇总成一格，中性灰，不参与涨跌配色 */
+.cell.rest {
+  background: rgba(255, 255, 255, .035);
+  color: var(--text-3);
+  cursor: default;
+}
+.cell.rest:hover { filter: none; background: rgba(255, 255, 255, .06); }
+.cell.rest i { font-style: normal; font-family: var(--mono); opacity: .75; }

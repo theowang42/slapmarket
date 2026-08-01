@@ -183,8 +183,75 @@ function renderLegend(clamp) {
 
 // ── 热力图 ────────────────────────────────────────────────────
 const LABEL_H = 17;
-/** 每个格子至少要占这么多像素才画出来，否则小板块会糊成噪点。 */
-const MIN_CELL_AREA = 2400;
+
+/** 代码放得下的最小字号。再小就认不出来了，不如不画这格，把地方让给邻居。 */
+const MIN_FONT = 8;
+/** 格子的硬性下限。光看字号不够——又细又扁的格子字塞得进去，看着还是噪点。 */
+const MIN_W = 30, MIN_H = 15;
+/** 等宽字体的字宽约为字号的 0.62 倍，用来估算代码要占多宽。 */
+const CHAR_W = 0.62;
+/** 每格期望占的面积，决定一个板块框里画几只。调小图更密，调大更疏。 */
+const MIN_CELL_AREA = 1400;
+/** 每个板块至少画几只，再小的板块也不至于只剩一格。 */
+const MIN_CELLS = 2;
+
+/** 在给定格子里代码能用的字号；放不下返回 0。 */
+function symbolFontSize(symbol, cw, ch) {
+  if (cw < MIN_W || ch < MIN_H) return 0;
+  const fs = Math.min(17, (cw - 4) / (symbol.length * CHAR_W), (ch - 2) / 1.15);
+  return fs >= MIN_FONT ? fs : 0;
+}
+
+/**
+ * 排布一个板块内部的格子，保证**画出来的每一格都放得下代码**。
+ *
+ * 只按面积预筛不够：squarified 排出来的格子可能又细又长，面积够但宽度不足。
+ * 所以先排一次，把放不下名字的剔掉，用剩下的重排，反复几轮直到全部合格。
+ *
+ * 剔掉的不能凭空消失——它们的市值汇成一个"其他"格子一起参与排布。
+ * 否则留下的格子会把空出来的面积吃掉，图上就会出现"林德 = 整个材料板块"这种假象。
+ */
+function layoutCells(stocks, inner) {
+  // 第一步：按板块框的面积决定画几只。这一步必须先做——
+  // 如果直接靠"排完再剔"收敛，剔掉的市值会喂大"其他"格，"其他"又把邻居挤小、
+  // 于是剔掉更多，一路缩到只剩一两只。先按面积定量就不会进这个循环。
+  const room = Math.max(MIN_CELLS, Math.floor((inner.w * inner.h) / MIN_CELL_AREA));
+  let keep = stocks.slice(0, room);
+
+  // "其他"格的大小在这里一次定死，后面不再变。
+  // 如果让形状修正剔掉的票也并进来，这一格每轮都会变大、把邻居挤得更小，
+  // 于是剔掉更多——一路缩到只剩一两只。
+  const cut = stocks.slice(room);
+  const rest = cut.length ? { value: cut.reduce((a, b) => a + b.cap, 0), rest: cut.length } : null;
+
+  // 第二步：有限轮次的形状修正。面积够但又细又长的格子照样写不下名字，
+  // 剔掉重排。这一步剔掉的面积由邻居分掉，数量很少，失真可以忽略。
+  const layout = () => squarify([...keep.map((q) => ({ value: q.cap, q })), ...(rest ? [rest] : [])], inner);
+
+  for (let iter = 0; iter < 4; iter++) {
+    const cells = layout();
+    const bad = cells.filter((c) => c.item.q && !symbolFontSize(c.item.q.symbol, c.w - 1, c.h - 1));
+    if (!bad.length) return cells;
+
+    const drop = new Set(bad.map((c) => c.item.q.symbol));
+    const survivors = keep.filter((q) => !drop.has(q.symbol));
+    // 剪到头了就按市值取前几只收手，别把带坏格子的布局原样返回
+    if (survivors.length < MIN_CELLS) { keep = keep.slice(0, MIN_CELLS); break; }
+    keep = survivors;
+  }
+
+  // 收尾兜底：上面按 MIN_CELLS 收手时，留下的可能仍有写不下名字的。
+  // 窄窗口下就会这样。再剪一次，最少留最大的那一只。
+  let cells = layout();
+  const stillBad = cells.filter((c) => c.item.q && !symbolFontSize(c.item.q.symbol, c.w - 1, c.h - 1));
+  if (stillBad.length && keep.length > 1) {
+    const drop = new Set(stillBad.map((c) => c.item.q.symbol));
+    keep = keep.filter((q) => !drop.has(q.symbol));
+    if (!keep.length) keep = stocks.slice(0, 1);
+    cells = layout();
+  }
+  return cells;
+}
 
 function renderHeat(d) {
   const host = $('heat');
@@ -203,25 +270,31 @@ function renderHeat(d) {
     const showLabel = bh > 40 && bw > 52;
     const inner = { x: 0, y: showLabel ? LABEL_H : 0, w: bw, h: bh - (showLabel ? LABEL_H : 0) };
 
-    // 板块框有多大就画多少只：平均每格至少留出 MIN_CELL_AREA，
-    // 否则小板块会被十几只小票糊成一片噪点。stocks 已按市值降序，直接截断。
-    const room = Math.max(4, Math.floor((inner.w * inner.h) / MIN_CELL_AREA));
-    const drawn = s.stocks.slice(0, room);
-    const cells = squarify(drawn.map((q) => ({ value: q.cap, q })), inner);
+    const cells = layoutCells(s.stocks, inner);
+    // 标在"其他"格上的数字要等于真正没画出来的只数：
+    // 除了按面积裁掉的，还有形状修正剔掉的那几只。
+    const hidden = s.stocks.length - cells.filter((c) => c.item.q).length;
 
     const cellHtml = cells.map(({ item, x, y, w, h }) => {
-      const q = item.q;
       const cw = w - 1, ch = h - 1;
-      if (cw < 3 || ch < 3) return '';
-      const fs = Math.max(7.5, Math.min(17, Math.min(cw / 3.6, ch / 2.6)));
-      const showSym = cw > 26 && ch > 13;
-      const showPct = cw > 44 && ch > 28;
-      const body = showSym
-        ? `<b style="font-size:${fs.toFixed(1)}px">${q.symbol}</b>${showPct ? `<i style="font-size:${(fs * 0.68).toFixed(1)}px">${fmtPct(q.pct)}</i>` : ''}`
-        : '';
-      return `<div class="cell${cw < 34 ? ' tiny' : ''}" data-sym="${q.symbol}"
-        style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;width:${cw.toFixed(1)}px;height:${ch.toFixed(1)}px;
-        background:${heat(q.pct, clamp)};color:${heatText(q.pct, clamp)}">${body}</div>`;
+      const pos = `left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;width:${cw.toFixed(1)}px;height:${ch.toFixed(1)}px`;
+
+      // 没画出来的那些汇成一格中性灰，只标还剩多少只
+      if (item.rest) {
+        const label = cw > 24 && ch > 12
+          ? `<i style="font-size:${Math.min(11, ch / 2.2).toFixed(1)}px">+${hidden}</i>` : '';
+        return `<div class="cell rest" data-rest="${s.key}" style="${pos}">${label}</div>`;
+      }
+
+      const q = item.q;
+      const fs = symbolFontSize(q.symbol, cw, ch);
+      const showPct = fs && cw > 44 && ch >= fs * 2.1;
+      // fs 为 0 说明这格实在放不下名字（只会出现在极窄的板块框里）。
+      // 那就干脆别写——0px 的文字在 DOM 里存在却看不见，比留白更难查。
+      const body = (fs ? `<b style="font-size:${fs.toFixed(1)}px">${q.symbol}</b>` : '')
+        + (showPct ? `<i style="font-size:${(fs * 0.68).toFixed(1)}px">${fmtPct(q.pct)}</i>` : '');
+      return `<div class="cell${cw < 44 ? ' tiny' : ''}" data-sym="${q.symbol}"
+        style="${pos};background:${heat(q.pct, clamp)};color:${heatText(q.pct, clamp)}">${body}</div>`;
     }).join('');
 
     const cls = dirClass(s.pct);
@@ -254,6 +327,27 @@ function showTip(sym, ev) {
   tip.hidden = false;
   moveTip(ev);
 }
+/** "其他"格子的提示：列出被折叠的是哪些票，别让人以为那是块空白。 */
+function showRestTip(sectorKey, ev) {
+  const s = state?.sectors.find((x) => x.key === sectorKey);
+  if (!s) return;
+  const drawn = new Set([...document.querySelectorAll(`.sector-box[data-sector="${sectorKey}"] .cell[data-sym]`)]
+    .map((c) => c.dataset.sym));
+  const rest = s.stocks.filter((q) => !drawn.has(q.symbol));
+  const cap = rest.reduce((a, b) => a + b.cap, 0);
+  tip.innerHTML = `
+    <div class="tip-sym">未画出 ${rest.length} 只</div>
+    <div class="tip-name">${s.name} · 位置不够写名字。拉大窗口会多显示几只</div>
+    <div class="tip-grid">
+      <span>合计市值</span><b>${fmtCap(cap)}</b>
+      <span>占板块</span><b>${((cap / s.cap) * 100).toFixed(1)}%</b>
+    </div>
+    <div class="tip-name" style="margin-top:4px">灰格只代表其中一部分，其余面积被已画出的格子分掉了</div>
+    <div class="tip-name" style="margin-top:5px">${rest.slice(0, 12).map((q) => q.symbol).join(' ')}${rest.length > 12 ? ' …' : ''}</div>`;
+  tip.hidden = false;
+  moveTip(ev);
+}
+
 function moveTip(ev) {
   const r = tip.getBoundingClientRect();
   const x = Math.min(ev.clientX + 14, window.innerWidth - r.width - 8);
@@ -264,7 +358,9 @@ function moveTip(ev) {
 
 $('heat').addEventListener('mousemove', (ev) => {
   const cell = ev.target.closest('.cell');
-  if (cell) { showTip(cell.dataset.sym, ev); } else { tip.hidden = true; }
+  if (!cell) { tip.hidden = true; return; }
+  if (cell.dataset.rest) showRestTip(cell.dataset.rest, ev);
+  else showTip(cell.dataset.sym, ev);
 });
 $('heat').addEventListener('mouseleave', () => { tip.hidden = true; });
 
