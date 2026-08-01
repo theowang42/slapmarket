@@ -203,6 +203,7 @@ body {
 
 .sector-label {
   position: absolute;
+  white-space: nowrap;
   top: 0; left: 0; right: 0;
   height: 17px;
   display: flex;
@@ -232,7 +233,7 @@ body {
   transition: filter .15s ease, outline-color .15s ease;
 }
 .cell:hover { filter: brightness(1.35); outline-color: rgba(255, 255, 255, .5); z-index: 3; }
-.cell b { font-weight: 600; line-height: 1.05; letter-spacing: -.01em; }
+.cell b { font-weight: 600; line-height: 1.05; letter-spacing: -.01em; white-space: nowrap; }
 .cell i {
   font-style: normal;
   font-family: var(--mono);
@@ -367,12 +368,3 @@ body {
   .heat-panel { height: 62vh; }
   .side > .panel { flex: none; }
 }
-
-/* 没画出来的成分股汇总成一格，中性灰，不参与涨跌配色 */
-.cell.rest {
-  background: rgba(255, 255, 255, .035);
-  color: var(--text-3);
-  cursor: default;
-}
-.cell.rest:hover { filter: none; background: rgba(255, 255, 255, .06); }
-.cell.rest i { font-style: normal; font-family: var(--mono); opacity: .75; }
