@@ -483,7 +483,7 @@ function drawCard(ctx, cast, t) {
   if (l) col(x + (w * 5) / 6, '今日最惨', `${l.sym} ${fmt(l.pct)}`, '#ff5865');
   ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.font = `600 18px ${FONT}`;
-  ctx.fillText('us-market-pulse', x + w / 2, y + h - 18);
+  ctx.fillText('slapmarket', x + w / 2, y + h - 18);
   ctx.restore();
 }
 

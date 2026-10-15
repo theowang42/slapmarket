@@ -272,7 +272,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`\n  us-market-pulse  →  http://localhost:${PORT}\n`);
+  console.log(`\n  slapmarket  →  http://localhost:${PORT}\n`);
   // 暴露到局域网是个有后果的选择（自选是可写的），得让人看见自己选了什么
   if (!['127.0.0.1', 'localhost', '::1'].includes(HOST)) {
     console.log(`  ⚠️  正在监听 ${HOST}——局域网内任何人都能访问，且能修改自选\n`);

@@ -1,9 +1,9 @@
 {
-  "name": "us-market-pulse",
+  "name": "slapmarket",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "美股盘中看板，以自选股为主。零依赖，本地运行。",
+  "description": "美股打屁股大会：市值前 100 的公司变成 100 个小人，涨幅前十打跌幅前十的屁股。实时行情，零依赖。",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",

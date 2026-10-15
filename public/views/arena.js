@@ -116,7 +116,7 @@ export function arena(host) {
     recorder.onstop = () => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob(chunks, { type }));
-      a.download = `spank-${cast.date || 'today'}.${type.includes('mp4') ? 'mp4' : 'webm'}`;
+      a.download = `slapmarket-${cast.date || 'today'}.${type.includes('mp4') ? 'mp4' : 'webm'}`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       recorder = null;
