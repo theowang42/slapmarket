@@ -3,8 +3,8 @@ import { toast } from './dom.js';
 /**
  * 行情的单一数据源，两条节奏：
  *
- * - 全量（/api/overview）：指数、自选、标普 500 全部成分股。交易时段 30 秒一次。
- * - 快刷（/api/live）：指数、自选、市值前 100。交易时段 5 秒一次，
+ * - 全量（/api/overview）：指数、自选、标普 500 全部成分股。交易时段 1 分钟一次。
+ * - 快刷（/api/live）：指数、自选、市值前 100。交易时段 30 秒一次，
  *   拿回来合并进全量快照里。人最盯着看的就是这几只，让它们先快起来。
  *
  * 视图不各自去 fetch，只订阅。订阅时可以声明不要快刷——财报、宽度页
@@ -74,11 +74,14 @@ async function refreshLive() {
 
 const phase = () => data?.session?.phase;
 
-/** 全量：交易时段 30 秒，盘前盘后 60 秒，休市 5 分钟。 */
-const fullDelay = () => (phase() === 'open' ? 30_000 : phase() === 'pre' || phase() === 'post' ? 60_000 : 300_000);
+/** 全量：交易时段 1 分钟，盘前盘后 2 分钟，休市 5 分钟。 */
+const fullDelay = () => (phase() === 'open' ? 60_000 : phase() === 'pre' || phase() === 'post' ? 120_000 : 300_000);
 
-/** 快刷：交易时段 5 秒，盘前盘后 15 秒，休市不快刷（价格不动，没意义）。 */
-const liveDelay = () => (phase() === 'open' ? 5_000 : phase() === 'pre' || phase() === 'post' ? 15_000 : null);
+/**
+ * 快刷：交易时段 30 秒，盘前盘后 1 分钟，休市不快刷（价格不动，没意义）。
+ * 原来是 5 秒，Yahoo 扛不住、会限流，放慢到 30 秒。
+ */
+const liveDelay = () => (phase() === 'open' ? 30_000 : phase() === 'pre' || phase() === 'post' ? 60_000 : null);
 
 let started = false;
 
@@ -103,6 +106,6 @@ export function start() {
 
   // 切回标签页时补一次，别让人对着一屏几分钟前的价格看
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && data && Date.now() - data.fetchedAt > 30_000) refresh();
+    if (!document.hidden && data && Date.now() - data.fetchedAt > 60_000) refresh();
   });
 }

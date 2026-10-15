@@ -103,10 +103,10 @@ export const HOLDINGS_TTL_HOURS = 12;
 export const MARKET_CLOSURES = {};
 
 /**
- * 服务端缓存秒数。缓存是给"多开几个标签页"挡着的，不是用来省延迟的：
- * live 是指数 + 自选的快刷，前端交易时段 5 秒问一次，缓存要比它短。
+ * 服务端缓存秒数。前端交易时段快刷 30 秒、全量 1 分钟，缓存比它们略短。
+ * 数据源（尤其 Yahoo）问得太勤会被限流，宁可慢一点。
  */
-export const CACHE_TTL = { live: 3, quotes: 30, charts: 120, details: 3600 };
+export const CACHE_TTL = { live: 25, quotes: 55, charts: 180, details: 3600 };
 
 export const PORT = process.env.PORT || 5173;
 

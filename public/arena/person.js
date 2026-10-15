@@ -106,19 +106,27 @@ function arm(ctx, sx, angle, look, far) {
 
 function torso(ctx, look, dir) {
   const w = 0.33, top = SHOULDER - 0.02, h = HIP - top + 0.02;
-  const g = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
-  g.addColorStop(0, shade(look.shirt, 0.18));
-  g.addColorStop(1, shade(look.shirt, -0.18));
-  ctx.fillStyle = g;
+  // 渐变的坐标在单位空间里，跟人站在哪无关，每个人建一次就够——每帧一百个人各建两个太浪费
+  look.torsoG ??= (() => {
+    const g = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+    g.addColorStop(0, shade(look.shirt, 0.18));
+    g.addColorStop(1, shade(look.shirt, -0.18));
+    return g;
+  })();
+  ctx.fillStyle = look.torsoG;
   roundRect(ctx, -w / 2, top, w, h, 0.08);
   ctx.fill();
 
-  // 胸口印代码。镜像回来，字永远是正的
+  // 胸口印代码。镜像回来，字永远是正的。
+  // 远处的人字只有几个像素，根本看不清，干脆不画——设字体是画小人最贵的一步
+  const t = look.ticker;
+  const fs = Math.min(0.11, 0.36 / t.length);
+  const m = ctx.getTransform();
+  if (fs * Math.hypot(m.a, m.b) < 7) return;
   ctx.save();
   ctx.scale(dir, 1);
-  const t = look.ticker;
   ctx.fillStyle = 'rgba(255,255,255,0.95)';
-  ctx.font = `900 ${Math.min(0.11, 0.36 / t.length)}px ${FONT}`;
+  ctx.font = `900 ${fs}px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(t, 0, (top + HIP) / 2 + 0.01);
@@ -131,10 +139,13 @@ function head(ctx, look, face) {
     ctx.fillStyle = look.hairColor;
     ctx.beginPath(); ctx.ellipse(-0.04, HEAD_Y + 0.06, HEAD_R * 1.05, HEAD_R * 1.15, 0, 0, Math.PI * 2); ctx.fill();
   }
-  const g = ctx.createRadialGradient(0.06, HEAD_Y - 0.06, 0.02, 0, HEAD_Y, HEAD_R);
-  g.addColorStop(0, shade(look.skin, 0.12));
-  g.addColorStop(1, shade(look.skin, -0.08));
-  ctx.fillStyle = g;
+  look.headG ??= (() => {
+    const g = ctx.createRadialGradient(0.06, HEAD_Y - 0.06, 0.02, 0, HEAD_Y, HEAD_R);
+    g.addColorStop(0, shade(look.skin, 0.12));
+    g.addColorStop(1, shade(look.skin, -0.08));
+    return g;
+  })();
+  ctx.fillStyle = look.headG;
   ctx.beginPath(); ctx.arc(0, HEAD_Y, HEAD_R, 0, Math.PI * 2); ctx.fill();
   hair(ctx, look);
   drawFace(ctx, face, look);
@@ -253,6 +264,23 @@ function handprint(ctx, x, y, a) {
   ctx.restore();
 }
 
+/** 一团柔光的贴图，按颜色缓存。比每帧每根荧光棒建一个径向渐变快得多 */
+const glows = new Map();
+export function glowSprite(c) {
+  if (!glows.has(c)) {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const g2 = cv.getContext('2d');
+    const g = g2.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, `rgba(${c},1)`);
+    g.addColorStop(1, `rgba(${c},0)`);
+    g2.fillStyle = g;
+    g2.fillRect(0, 0, 64, 64);
+    glows.set(c, cv);
+  }
+  return glows.get(c);
+}
+
 /**
  * 荧光棒：举在手里，涨亮绿、跌亮红，涨跌越大越亮。on 从 0 到 1 是点亮的过程。
  * 后排几十根一起亮，就是一片光海——一眼看出今天整体是红是绿。
@@ -272,11 +300,8 @@ function drawLight(ctx, x, y, s, p) {
   if (on > 0) {
     ctx.globalCompositeOperation = 'lighter';
     const r = s * (0.32 + 0.25 * k) * on;
-    const g = ctx.createRadialGradient(tx, ty, 0, tx, ty, r);
-    g.addColorStop(0, `rgba(${c},${0.75 * k * on})`);
-    g.addColorStop(1, `rgba(${c},0)`);
-    ctx.fillStyle = g;
-    ctx.fillRect(tx - r, ty - r, r * 2, r * 2);
+    ctx.globalAlpha *= 0.75 * k * on;
+    ctx.drawImage(glowSprite(c), tx - r, ty - r, r * 2, r * 2);
   }
   ctx.restore();
 }
@@ -302,10 +327,14 @@ function drawSign(ctx, x, y, s, sign, alpha, handY, handX) {
   ctx.fillStyle = showFront
     ? (up ? `rgb(${lerpC([226, 246, 236], [16, 160, 94], k)})` : `rgb(${lerpC([252, 232, 233], [214, 52, 60], k)})`)
     : '#fbfaf6';
-  ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = s * 0.06; ctx.shadowOffsetY = s * 0.02;
+  // 阴影用错位的深色底代替 shadowBlur——四十块牌子各做一次模糊，帧数直接掉一半
+  const face = ctx.fillStyle;
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  roundRect(ctx, -w / 2, -h / 2 + s * 0.025, w, h, h * 0.18);
+  ctx.fill();
+  ctx.fillStyle = face;
   roundRect(ctx, -w / 2, -h / 2, w, h, h * 0.18);
   ctx.fill();
-  ctx.shadowColor = 'transparent';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const dark = showFront && k > 0.45;
   ctx.fillStyle = dark ? '#fff' : '#1b1b22';

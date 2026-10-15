@@ -42,7 +42,13 @@ export class LiveStage {
   }
 
   /** 新行情到了：重新排名。位置变了的人从当前位置开始走向新位置 */
+  /**
+   * 返回这一轮发生了什么，给音效用：
+   * enter（有人新上榜）、newTop（涨幅第一换人）、newBottom（跌幅第一换人）、first（第一次进场）
+   */
   update(cast, now) {
+    const events = [];
+    const first = !this.drawn.size;
     this.cast = cast;
     const sorted = [...cast.people].sort((a, b) => b.pct - a.pct);
     const up = sorted.slice(0, 10), down = sorted.slice(-10).reverse();
@@ -69,7 +75,15 @@ export class LiveStage {
       if (old != null && old !== p.pct) this.flash.set(p.sym, now);
       this.pct.set(p.sym, p.pct);
     }
+    if (first) events.push('first');
+    else {
+      const top = (rs, side) => [...rs].find(([, r]) => r.side === side && r.rank === 1)?.[0];
+      if (top(roles, 'up') !== top(this.roles, 'up')) events.push('newTop');
+      if (top(roles, 'down') !== top(this.roles, 'down')) events.push('newBottom');
+      if ([...roles.keys()].some((s) => !this.roles.has(s))) events.push('enter');
+    }
     this.roles = roles;
+    return events;
   }
 
   /** 某人此刻该站的地方：台上就是柱顶，否则回观众席 */
@@ -118,9 +132,7 @@ export class LiveStage {
     // 观众席先画，蒙一层薄雾，再画台上的和正在走的——台上的人才跳得出来
     const crowd = actors.filter((a) => a.where === 'home').sort((a, b) => a.y - b.y);
     const front = actors.filter((a) => a.where !== 'home').sort((a, b) => a.y - b.y);
-    for (const a of crowd) this.person(ctx, a, hover);
-    ctx.fillStyle = 'rgba(10,6,20,0.32)';
-    ctx.fillRect(-400, -400, W + 800, 2000);
+    this.drawCrowd(ctx, crowd, now, hover);
 
     this.drawBars(ctx);
     for (const a of front) this.person(ctx, a, hover);
@@ -190,7 +202,31 @@ export class LiveStage {
     return { p, x, y, s, pose, where: 'stage', role, hovered };
   }
 
-  person(ctx, a, hover) {
+  /**
+   * 观众席一百个人是最贵的一块，而他们只是在原地轻轻晃。所以每 0.1 秒才重画一次，
+   * 存成一张图（连同上面那层薄雾），其余帧直接贴。台上的人还是每帧画。
+   */
+  drawCrowd(ctx, crowd, now, hover) {
+    const k = ctx.getTransform().a;
+    const hoverKey = hover?.kind === 'person' ? hover.sym : '';
+    const L = this.crowdLayer;
+    const stale = !L || L.k !== k || now - L.at > 0.1 || L.hover !== hoverKey || L.n !== crowd.length;
+    if (stale) {
+      const cv = L?.k === k ? L.cv : document.createElement('canvas');
+      cv.width = Math.ceil(W * k); cv.height = Math.ceil(1080 * k);
+      const c = cv.getContext('2d');
+      c.setTransform(k, 0, 0, k, 0, 0);
+      const hits = [];
+      for (const a of crowd) this.person(c, a, hover, hits);
+      c.fillStyle = 'rgba(10,6,20,0.32)';
+      c.fillRect(0, 0, W, 1080);
+      this.crowdLayer = { cv, k, at: now, hover: hoverKey, n: crowd.length, hits };
+    }
+    ctx.drawImage(this.crowdLayer.cv, 0, 0, W, 1080);
+    this.hits.push(...this.crowdLayer.hits);
+  }
+
+  person(ctx, a, hover, hits = this.hits) {
     const { p, x, y, s, pose } = a;
     if (a.hovered) glowRing(ctx, x, y, s, p.pct >= 0 ? '#3dffa0' : '#ff4d5e', 1);
     drawPerson(ctx, p.look, pose, x, y, s);
@@ -200,10 +236,10 @@ export class LiveStage {
       if (a.role.side === 'up' && a.role.rank === 1) crown(ctx, x + 0.02 * s, top + 0.02 * s, s, this.last);
       if (a.role.side === 'down' && a.role.rank === 1) rainCloud(ctx, x, top - 0.42 * s, s, this.last);
       tag(ctx, x, top - (a.role.rank === 1 ? 0.3 : 0.08) * s, s, p, a.hovered, this.flashK(p.sym));
-      this.hits.push({ kind: 'person', sym: p.sym, x0: x - 0.45 * s, y0: top - 0.5 * s, x1: x + 0.45 * s, y1: FLOOR });
+      hits.push({ kind: 'person', sym: p.sym, x0: x - 0.45 * s, y0: top - 0.5 * s, x1: x + 0.45 * s, y1: FLOOR });
     } else if (a.where === 'home') {
       // 观众的可点区域包括头顶的牌子 / 荧光棒
-      this.hits.push({ kind: 'person', sym: p.sym, x0: x - 0.4 * s, y0: y - 1.6 * s, x1: x + 0.4 * s, y1: y });
+      hits.push({ kind: 'person', sym: p.sym, x0: x - 0.4 * s, y0: y - 1.6 * s, x1: x + 0.4 * s, y1: y });
     }
   }
 
@@ -268,10 +304,13 @@ function tag(ctx, x, bottom, s, p, hovered, flash) {
   const w = s * 0.82 * k, h = s * 0.38 * k;
   ctx.save();
   ctx.fillStyle = up ? `rgba(14,${140 + 80 * flash},86,0.95)` : `rgba(${200 + 55 * flash},44,56,0.95)`;
-  ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 8;
+  const face = ctx.fillStyle;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  roundRect(ctx, x - w / 2, bottom - h + 3, w, h, h * 0.25);
+  ctx.fill();
+  ctx.fillStyle = face;
   roundRect(ctx, x - w / 2, bottom - h, w, h, h * 0.25);
   ctx.fill();
-  ctx.shadowColor = 'transparent';
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = `900 ${h * 0.4}px ${FONT}`;

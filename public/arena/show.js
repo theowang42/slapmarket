@@ -44,6 +44,37 @@ const ORDER = [10, 8, 6, 4, 2, 3, 5, 7, 9];
 const slapAt = (rank) => (rank === 1 ? T.heroImpact - 0.42 : T.slaps + ORDER.indexOf(rank) * T.slapGap);
 const IMPACT = 0.42;     // 抡手开始后多久打到
 
+/**
+ * 音效时间表：[秒, 音效名, ...参数]。画面在哪一刻发生什么，声音就跟着那一刻。
+ * 播放时每帧把"上一帧到这一帧之间"的条目放掉。
+ */
+export function cues(cast) {
+  const main = cast.statues.find((s) => s.main);
+  const list = [
+    [0.5, 'rumble', 1.8],
+    [1.2, 'boom', 0.6],
+    [2.0, 'twinkle'],
+    [T.wave[0], 'cheer', 0.45, T.wave[1] - T.wave[0] + 0.4],
+    [T.banner, 'boom', 1],
+    [T.banner + 0.05, 'cheer', 0.8, 1.6],
+    [T.walk[0], 'whoosh', true, 0.8, 0.25],
+    [15.0, 'drumroll', T.heroImpact - 15.05],
+    [T.heroImpact, 'bigSlap'],
+    [T.heroImpact + 0.05, 'whoosh', true, 1.1, 0.5],
+    [T.heroImpact + 0.1, 'cheer', 1.2, 2.8],
+    [18.4, 'twinkle'],
+    [T.finale, 'roar', main?.kind ?? 'bull'],
+    [T.finale + 0.3, cast.market >= 0 ? 'coins' : 'rain', 3.5],
+    [T.card, cast.market >= 0 ? 'fanfare' : 'sadTrombone'],
+  ];
+  for (const g of cast.gainers) {
+    if (g.rank === 1) continue;
+    const at = slapAt(g.rank) + IMPACT;
+    list.push([at, 'slap', 0.6 + 0.4 * Math.min(1, Math.abs(g.pct) / 8)], [at + 0.05, 'cheer', 0.3, 0.6]);
+  }
+  return list.sort((a, b) => a[0] - b[0]);
+}
+
 // ── 每个人在 t 时刻的样子 ────────────────────────────────────────
 function crowdPose(p, t, now) {
   const { x, y, s } = p.home;

@@ -3,7 +3,8 @@ import { toast } from '../js/dom.js';
 import { fmtPrice, fmtPct, fmtCap, fmtVol, dirClass, dirColor } from '../js/fmt.js';
 import { sparkSvg, rangeBar } from '../js/widgets.js';
 import { W, H, buildCast } from '../arena/cast.js';
-import { drawFrame, DURATION } from '../arena/show.js';
+import { drawFrame, DURATION, cues } from '../arena/show.js';
+import { sound } from '../arena/sound.js';
 import { LiveStage } from '../arena/live.js';
 import { createDrawer } from '../arena/drawer.js';
 
@@ -19,6 +20,7 @@ const SHELL = `
     <div class="arena-tip" id="tip" hidden></div>
     <aside class="arena-drawer" id="drawer"></aside>
     <div class="arena-ui">
+      <button id="sound" title="声音开关"></button>
       <button id="replay" title="空格">▶ 收盘大戏</button>
       <button id="record" title="录下整场大戏，下载成视频">⏺ 录视频</button>
       <a href="#/board">看盘 →</a>
@@ -41,7 +43,7 @@ export function arena(host) {
   let data = null;
   let cast = null;           // 实时的演员表，每次行情更新都重建
   let showCast = null;       // 大戏开演那一刻冻住的演员表
-  let playing = null;        // { start }
+  let playing = null;        // { start, cues, lastT }
   let recorder = null;
   let fixedT = null;         // 逐帧导出
   let hover = null;          // 鼠标下面是谁
@@ -52,8 +54,13 @@ export function arena(host) {
 
   // ── 画布尺寸：按 16:9 留黑边。录视频时固定 1920×1080 ───────────
   let view;
+  /**
+   * 渲染分辨率倍率。高分屏（Mac Retina）像素是普通屏的四倍，机器带不动就自动降一点，
+   * 顺了再升回去。画面稍微软一点，换来流畅——动画卡成幻灯片比糊一点难看得多。
+   */
+  let quality = 1;
   function fit() {
-    const dpr = recorder ? 1 : Math.min(2, window.devicePixelRatio || 1);
+    const dpr = recorder ? 1 : Math.min(2, window.devicePixelRatio || 1) * quality;
     const cw = recorder ? W : canvas.clientWidth, ch = recorder ? H : canvas.clientHeight;
     canvas.width = Math.round(cw * dpr);
     canvas.height = Math.round(ch * dpr);
@@ -70,15 +77,31 @@ export function arena(host) {
     return { x: (px - view.ox) / view.k, y: (py - view.oy) / view.k };
   }
 
+  // 每秒看一次这一秒的平均帧耗时，决定要不要调画质
+  const perf = { last: 0, sum: 0, n: 0, since: 0, good: 0 };
+  function tune(nowMs) {
+    if (perf.last) { perf.sum += nowMs - perf.last; perf.n++; }
+    perf.last = nowMs;
+    if (nowMs - perf.since < 1000 || recorder) return;
+    const avg = perf.sum / Math.max(1, perf.n);
+    perf.sum = 0; perf.n = 0; perf.since = nowMs;
+    if (document.hidden) return;
+    if (avg > 26 && quality > 0.5) { quality = Math.max(0.5, quality * 0.8); perf.good = 0; fit(); }
+    else if (avg < 15 && quality < 1 && ++perf.good >= 3) { quality = Math.min(1, quality / 0.8); perf.good = 0; fit(); }
+  }
+
   // ── 每帧 ────────────────────────────────────────────────────────
   function frame(nowMs) {
     if (!alive) return;
     raf = requestAnimationFrame(frame);
     if (!cast || fixedT != null) return;
+    tune(nowMs);
     const now = nowMs / 1000;
     begin();
     if (playing) {
       const t = (nowMs - playing.start) / 1000;
+      for (const c of playing.cues) if (c[0] > playing.lastT && c[0] <= t) sound.play(c[1], ...c.slice(2));
+      playing.lastT = t;
       if (t >= DURATION) { playing = null; fadeFrom = nowMs; finishRecording(); root.classList.remove('is-playing'); }
       else drawFrame(ctx, showCast, t, t);
     }
@@ -101,7 +124,7 @@ export function arena(host) {
   function play() {
     if (!cast) return;
     showCast = cast;
-    playing = { start: performance.now() };
+    playing = { start: performance.now(), cues: cues(cast), lastT: -1 };
     hover = null; hideTip(); drawer.close();
     root.classList.add('is-playing');
   }
@@ -109,8 +132,12 @@ export function arena(host) {
   function record() {
     if (!cast || recorder) return;
     if (!window.MediaRecorder || !canvas.captureStream) { toast('这个浏览器不支持录制，换 Chrome 试试'); return; }
-    const type = ['video/mp4;codecs=avc1', 'video/webm;codecs=vp9', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m));
-    recorder = new MediaRecorder(canvas.captureStream(60), { mimeType: type, videoBitsPerSecond: 12_000_000 });
+    const type = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/webm;codecs=vp9,opus', 'video/mp4;codecs=avc1', 'video/webm']
+      .find((m) => MediaRecorder.isTypeSupported(m));
+    // 画面 + 声音合成一路。没开声音就只录画面
+    const audio = sound.ready && !sound.muted ? sound.stream()?.getAudioTracks() ?? [] : [];
+    const stream = new MediaStream([...canvas.captureStream(60).getVideoTracks(), ...audio]);
+    recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 12_000_000 });
     const chunks = [];
     recorder.ondataavailable = (e) => chunks.push(e.data);
     recorder.onstop = () => {
@@ -225,6 +252,7 @@ export function arena(host) {
     canvas.style.cursor = h ? 'pointer' : '';
     lastEv = ev;
     if (key !== (hover && `${hover.kind}:${hover.sym ?? hover.index}`)) {
+      if (h) sound.play('tick');
       hover = h;
       if (h) showTip(h, ev); else { hideTip(); tipFor = null; }
     } else if (h) placeTip(ev);
@@ -242,6 +270,8 @@ export function arena(host) {
     const h = stage.hitTest(...Object.values(toStage(ev)));
     if (!h) { if (drawer.open) closeDrawer(); return; }
     hideTip();
+    sound.play('pop');
+    sound.play('whoosh', true, 0.35, 0.12);
     if (h.kind === 'person') openSym(h.sym);
     else { const st = cast.statues[h.index]; drawer.show({ sym: st.sym, title: st.label, members: st.members }); root.classList.add('drawer-open'); }
   });
@@ -265,10 +295,31 @@ export function arena(host) {
   // ── 按键 ────────────────────────────────────────────────────────
   const onKey = (e) => {
     if (e.target.closest?.('input')) return;
+    wake();
     if (e.code === 'Space') { e.preventDefault(); play(); }
     if (e.key === 'Escape' && drawer.open) closeDrawer();
   };
   window.addEventListener('keydown', onKey);
+  // ── 声音 ────────────────────────────────────────────────────────
+  // 浏览器要求先有一次点击 / 按键才能出声。没解锁前按钮写"开声音"
+  const soundBtn = $('sound');
+  function paintSound() {
+    soundBtn.textContent = !sound.ready ? '🔈 开声音' : sound.muted ? '🔇 静音' : '🔊 声音';
+  }
+  function wake() {
+    if (sound.ready) return;
+    sound.unlock();
+    setTimeout(() => { sound.ambient(!sound.muted && !playing); paintSound(); }, 50);
+  }
+  soundBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!sound.ready) { sound.unlock(); sound.setMuted(false); }
+    else sound.setMuted(!sound.muted);
+    setTimeout(() => { sound.ambient(!sound.muted); paintSound(); }, 50);
+  });
+  root.addEventListener('pointerdown', wake);
+  paintSound();
+
   $('replay').addEventListener('click', play);
   $('record').addEventListener('click', record);
 
@@ -277,13 +328,28 @@ export function arena(host) {
     duration: DURATION,
     ready: () => !!cast,
     seek(t) { fixedT = t; showCast ??= cast; root.classList.add('is-playing'); begin(); drawFrame(ctx, showCast, t, t); end(); },
+    /** 整场大戏的配音，WAV，和 seek 出来的画面一一对应 */
+    async soundtrack() {
+      showCast ??= cast;
+      const buf = await sound.renderWav(cues(showCast), DURATION);
+      let s = '';
+      const b = new Uint8Array(buf);
+      for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+      return btoa(s);
+    },
   };
 
   // ── 行情 ────────────────────────────────────────────────────────
   const unsubscribe = subscribe((d, kind) => {
     data = d;
     cast = buildCast(d);
-    stage.update(cast, performance.now() / 1000);
+    const events = stage.update(cast, performance.now() / 1000);
+    if (!playing) {
+      if (events.includes('first')) sound.play('cheer', 0.3, 1.8);
+      if (events.includes('newTop')) sound.play('fanfare');
+      if (events.includes('newBottom')) sound.play('sadTrombone');
+      if (events.includes('enter')) { sound.play('whoosh', true, 0.7, 0.2); sound.play('cheer', 0.25, 0.8); }
+    }
     $('wait').hidden = true;
     renderHud(d);
     if (drawer.open && kind === 'live') drawer.refresh();
@@ -301,6 +367,7 @@ export function arena(host) {
     unsubscribe();
     finishRecording();
     drawer.destroy();
+    sound.ambient(false);
     window.removeEventListener('resize', fit);
     window.removeEventListener('keydown', onKey);
     document.body.classList.remove('arena-mode');

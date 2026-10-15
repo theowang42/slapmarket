@@ -1,5 +1,5 @@
 import { clamp, lerp, seg, ease, hash, rng } from './math.js';
-import { FONT, roundRect } from './person.js';
+import { FONT, roundRect, glowSprite } from './person.js';
 import { renderStatue } from './statue.js';
 import { W, H } from './cast.js';
 
@@ -16,38 +16,62 @@ export const FINALE = 19.2;
 export const SETTLED = 30;
 
 const statueCache = new Map();
-function statueImg(kind, h) {
-  const k = `${kind}:${h}`;
-  if (!statueCache.has(k)) statueCache.set(k, renderStatue(kind, h, 2));
+/** 按当前实际显示的分辨率生成，贴图时不用再缩放——缩放一张大图每帧也不便宜 */
+function statueImg(kind, h, scale) {
+  const r = Math.min(2, Math.max(0.5, Math.round(scale * 4) / 4));
+  const k = `${kind}:${h}:${r}`;
+  if (!statueCache.has(k)) statueCache.set(k, renderStatue(kind, h, r));
   return statueCache.get(k);
 }
 
 // ── 天空、城市、跑马灯 ──────────────────────────────────────────────
-export function drawSky(ctx, cast, t, now) {
-  const g = ctx.createLinearGradient(0, 0, 0, 560);
+/**
+ * 天空渐变、城市剪影、上千扇亮着的窗户——这些都不动，画一次存成图。
+ * 按当前缩放分档缓存，高分屏上也是清楚的。
+ */
+let skyCache = null;
+function skyImage(cast, scale) {
+  const k = Math.min(2, Math.max(1, Math.round(scale * 2) / 2));
+  if (skyCache?.cast === cast.skyline && skyCache.k === k) return skyCache;
+  const x0 = -400, y0 = -400, w = W + 800, h = 960;
+  const cv = document.createElement('canvas');
+  cv.width = Math.ceil(w * k); cv.height = Math.ceil(h * k);
+  const c = cv.getContext('2d');
+  c.setTransform(k, 0, 0, k, -x0 * k, -y0 * k);
+  const g = c.createLinearGradient(0, 0, 0, 560);
   g.addColorStop(0, '#060818'); g.addColorStop(0.55, '#171338'); g.addColorStop(1, '#3d2453');
-  ctx.fillStyle = g;
-  ctx.fillRect(-400, -400, W + 800, 960);
-
-  // 星星
-  const r = rng(3);
-  for (let i = 0; i < 90; i++) {
-    const x = r() * W, y = r() * 330, tw = 0.4 + 0.6 * Math.abs(Math.sin(now * (0.5 + r()) + i));
-    ctx.fillStyle = `rgba(255,255,255,${0.5 * tw * r()})`;
-    ctx.fillRect(x, y, 1.6, 1.6);
-  }
-
-  // 城市剪影，带亮着的窗户
+  c.fillStyle = g;
+  c.fillRect(x0, y0, w, h);
   for (const b of cast.skyline) {
     const top = 470 - b.h;
-    ctx.fillStyle = '#0c0d1e';
-    ctx.fillRect(b.x, top, b.w, b.h + 60);
+    c.fillStyle = '#0c0d1e';
+    c.fillRect(b.x, top, b.w, b.h + 60);
     const wr = rng(Math.floor(b.seed * 1e6));
-    ctx.fillStyle = 'rgba(255,214,140,0.55)';
+    c.fillStyle = 'rgba(255,214,140,0.55)';
     for (let wy = top + 10; wy < 450; wy += 14) {
-      for (let wx = b.x + 6; wx < b.x + b.w - 8; wx += 11) if (wr() < 0.22) ctx.fillRect(wx, wy, 5, 7);
+      for (let wx = b.x + 6; wx < b.x + b.w - 8; wx += 11) if (wr() < 0.22) c.fillRect(wx, wy, 5, 7);
     }
   }
+  // 星星要闪，不能画死在图里；先挑出不被楼挡住的那些，每帧只画它们
+  const r = rng(3);
+  const stars = [];
+  for (let i = 0; i < 90; i++) {
+    const s = { x: r() * W, y: r() * 330, f: 0.5 + r(), a: r(), i };
+    if (!cast.skyline.some((b) => s.x >= b.x && s.x <= b.x + b.w && s.y >= 470 - b.h)) stars.push(s);
+  }
+  return (skyCache = { cast: cast.skyline, k, cv, x0, y0, w, h, stars });
+}
+
+export function drawSky(ctx, cast, t, now) {
+  const sky = skyImage(cast, ctx.getTransform().a);
+  ctx.drawImage(sky.cv, sky.x0, sky.y0, sky.w, sky.h);
+
+  for (const s of sky.stars) {
+    const tw = 0.4 + 0.6 * Math.abs(Math.sin(now * s.f + s.i));
+    ctx.fillStyle = `rgba(255,255,255,${0.5 * tw * s.a})`;
+    ctx.fillRect(s.x, s.y, 1.6, 1.6);
+  }
+
 
   // 跑马灯：当天波动最大的 40 只滚过去
   const y = 372, h = 34;
@@ -77,17 +101,17 @@ export function drawStatues(ctx, cast, t, now, hover = -1) {
   cast.statues.forEach((st, i) => {
     const order = st.main ? 0 : i;
     const rise = ease.out(seg(t, 0.5 + order * 0.2, 1.9 + order * 0.2));
-    const img = statueImg(st.kind, st.h);
+    const img = statueImg(st.kind, st.h, ctx.getTransform().a);
     const up = st.pct >= 0;
     const color = up ? '61,255,154' : '255,77,94';
 
     // 背后的光晕，谢幕时变亮
     const glowK = (0.35 + 0.65 * ease.inOut(seg(t, FINALE, FINALE + 1)) * (0.75 + 0.25 * Math.sin(now * 3))) * (i === hover ? 2.2 : 1);
-    const gr = ctx.createRadialGradient(st.x, st.base - st.h * 0.45, 10, st.x, st.base - st.h * 0.45, st.h * 1.1);
-    gr.addColorStop(0, `rgba(${color},${0.32 * glowK * rise})`);
-    gr.addColorStop(1, `rgba(${color},0)`);
-    ctx.fillStyle = gr;
-    ctx.fillRect(st.x - st.h * 1.2, st.base - st.h * 1.6, st.h * 2.4, st.h * 1.8);
+    const R = st.h * 1.1, cy = st.base - st.h * 0.45;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, 0.32 * glowK * rise);
+    ctx.drawImage(glowSprite(color), st.x - R, cy - R, R * 2, R * 2);
+    ctx.restore();
 
     // 从底座里升起来：画在底座顶面以上的部分才看得见
     ctx.save();
@@ -182,7 +206,29 @@ function plinth(ctx, st, rise, color) {
 }
 
 // ── 地面和灯 ──────────────────────────────────────────────────────
+/** 不变的东西画一次存成图，按缩放分档。key 变了才重画 */
+const layers = new Map();
+function cached(ctx, key, x0, y0, w, h, paint) {
+  const k = Math.min(2, Math.max(0.5, Math.round(ctx.getTransform().a * 4) / 4));
+  let L = layers.get(key);
+  if (!L || L.k !== k) {
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(w * k); cv.height = Math.ceil(h * k);
+    const c = cv.getContext('2d');
+    c.setTransform(k, 0, 0, k, -x0 * k, -y0 * k);
+    paint(c);
+    layers.set(key, (L = { k, cv }));
+  }
+  ctx.drawImage(L.cv, x0, y0, w, h);
+}
+
 export function drawGround(ctx, t) {
+  // 开场那几秒台前的暖光在变亮，之后整块地面都是死的
+  if (t >= 7) return cached(ctx, 'ground', -400, 520, W + 800, H - 520 + 60, (c) => paintGround(c, 7));
+  paintGround(ctx, t);
+}
+
+function paintGround(ctx, t) {
   const g = ctx.createLinearGradient(0, 520, 0, H);
   g.addColorStop(0, '#2b2238'); g.addColorStop(0.45, '#1b1625'); g.addColorStop(1, '#0d0a12');
   ctx.fillStyle = g;
@@ -281,10 +327,19 @@ export function star(ctx, x, y, size, color, a, rot) {
 
 /** extra：额外压暗四角，大戏推特写时用 */
 export function vignette(ctx, extra = 0) {
-  const hero = extra;
-  const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
-  g.addColorStop(0, 'rgba(0,0,0,0)');
-  g.addColorStop(1, `rgba(0,0,0,${0.55 + 0.3 * hero})`);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  const paint = (c) => {
+    const g = c.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,0.55)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, W, H);
+  };
+  cached(ctx, 'vignette', 0, 0, W, H, paint);
+  // 推特写时四角再压暗一些：同一张图再叠一层
+  if (extra > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, (0.3 * extra) / 0.55);
+    cached(ctx, 'vignette', 0, 0, W, H, paint);
+    ctx.restore();
+  }
 }
