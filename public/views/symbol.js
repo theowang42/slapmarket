@@ -2,7 +2,7 @@ import { fmtPrice, fmtPct, fmtChg, fmtCap, fmtVol, dirClass, etToday } from '../
 import { subscribe, snapshot } from '../js/store.js';
 import { onResize, toast } from '../js/dom.js';
 import { drawChart, fmtFullTime } from '../js/chart.js';
-import { divBar, quoteFlags, extHours } from '../js/widgets.js';
+import { divBar, quoteFlags, extHours, metricRows } from '../js/widgets.js';
 
 const RANGES = ['1D', '5D', '1M', '3M', '6M', '1Y', '5Y', 'ALL'];
 const RANGE_LABEL = { '1D': '当日', '5D': '5日', '1M': '1月', '3M': '3月', '6M': '6月', '1Y': '1年', '5Y': '5年', ALL: '全部' };
@@ -46,24 +46,6 @@ const SHELL = `
       </section>
     </aside>
   </div>`;
-
-/** 指标格子。null 一律显示 —，不要显示 0 或 NaN 冒充有数据。 */
-function metricRows(q) {
-  const n = (v, digits = 2, suffix = '') => (v == null || !Number.isFinite(v) ? '—' : v.toFixed(digits) + suffix);
-  const cap = (v) => (v == null ? '—' : fmtCap(v));
-  return [
-    ['市盈率', n(q.pe)], ['远期市盈率', n(q.fpe)],
-    ['每股收益', n(q.eps)], ['预期 EPS', n(q.feps)],
-    ['市销率', n(q.psales)], ['股息率', n(q.dividendYield, 2, '%')],
-    ['Beta', n(q.beta)], ['ROE', n(q.roe, 1, '%')],
-    ['毛利率', n(q.grossMargin, 1, '%')], ['净利率', n(q.netMargin, 1, '%')],
-    ['负债/权益', n(q.debtToEquity, 1, '%')], ['营收 TTM', cap(q.revenueTTM)],
-    ['市值', cap(q.cap)], ['10 日均量', q.avgVol ? fmtVol(q.avgVol) : '—'],
-    ['今开', fmtPrice(q.open)], ['最高', fmtPrice(q.dayHi)],
-    // 指数不报成交量，给的是 0——同样别拿 0 冒充数据
-    ['最低', fmtPrice(q.dayLo)], ['成交量', q.volume ? fmtVol(q.volume) : '—'],
-  ];
-}
 
 export function symbol(host, { sym }) {
   host.innerHTML = SHELL;

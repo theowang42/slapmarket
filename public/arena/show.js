@@ -1,6 +1,9 @@
 import { clamp, lerp, seg, ease, hash, rng, wobble } from './math.js';
-import { drawPerson, lookFor, FONT, roundRect } from './person.js';
-import { renderStatue } from './statue.js';
+import { drawPerson, FONT, roundRect } from './person.js';
+import { W, H, SIGN_ROWS } from './cast.js';
+import {
+  LIGHTS, FINALE, drawSky, drawStatues, drawGround, drawSpotlights, glowRing, nameTag, star, vignette,
+} from './backdrop.js';
 
 /**
  * 打屁股大会。整场戏是一个关于时间 t 的纯函数：给一个 t，画出那一帧。
@@ -9,14 +12,13 @@ import { renderStatue } from './statue.js';
  * 画布逻辑尺寸固定 1920×1080，显示时整体缩放。
  */
 
-export const W = 1920, H = 1080;
 export const DURATION = 25;
 /** 不演的时候停在这一刻：灯亮着、雕塑立着、牌子已经翻过来 */
 export const IDLE_T = 5.0;
 
 // ── 场景时间表（秒）──────────────────────────────────────────────
 const T = {
-  lights: [0.2, 1.6],
+  lights: LIGHTS,
   wave: [2.6, 4.4],          // 人浪翻牌，从左到右
   banner: 5.2,               // "涨幅前十 VS 跌幅前十" 砸下来
   walk: [5.7, 7.5],          // 二十个人出列
@@ -25,72 +27,9 @@ const T = {
   slapGap: 0.62,
   hero: 14.3,                // 第一名对最后一名，镜头推进
   heroImpact: 17.25,
-  finale: 19.2,
+  finale: FINALE,
   card: 20.0,
 };
-
-const SECTOR_COLOR = {
-  tech: '#3d7bd9', comm: '#9b59d0', disc: '#e0603c', fin: '#c9a227', health: '#25a88f', staples: '#6fae3a',
-  energy: '#8a6242', indu: '#5f7d8e', mat: '#d4884a', util: '#26a6c9', reit: '#c2577a',
-};
-
-const ROWS = [
-  { y: 590, s: 50 }, { y: 640, s: 60 }, { y: 698, s: 71 }, { y: 764, s: 86 }, { y: 840, s: 102 },
-];
-/** 前两排（市值最大的 40 家）举牌子写代码，后面三排举荧光棒 */
-const SIGN_ROWS = 3;
-
-// ── 选角 ──────────────────────────────────────────────────────────
-/**
- * /api/overview 的快照 → 演员表。
- * 市值前 100 进场；涨幅前十、跌幅前十上台；大盘和最大的 4 个板块立雕塑。
- */
-export function buildCast(data) {
-  const all = data.sectors.flatMap((s) => s.stocks.map((x) => ({ ...x, sector: s.key })));
-  const top = all.filter((x) => x.cap && x.pct != null).sort((a, b) => b.cap - a.cap).slice(0, 100);
-
-  // 市值越大越靠前排、越靠中间
-  const order = [];
-  for (let k = 0; k < 20; k++) order.push(10 + (k % 2 ? -Math.ceil(k / 2) : k / 2));
-  const people = top.map((x, i) => {
-    const row = 4 - Math.floor(i / 20);
-    const r = rng(hash(x.symbol));
-    const slot = order[i % 20];
-    const { y, s } = ROWS[row];
-    return {
-      sym: x.symbol, pct: x.pct, cap: x.cap, sector: x.sector,
-      look: lookFor(x.symbol, SECTOR_COLOR[x.sector] ?? '#777'),
-      seed: r() * 100,
-      home: { x: 70 + slot * (1780 / 19) + (row % 2 ? 40 : -10) + (r() - 0.5) * 24, y: y + (r() - 0.5) * 10, s: s * (0.94 + r() * 0.12), row },
-    };
-  });
-
-  const byPct = [...people].sort((a, b) => b.pct - a.pct);
-  const gainers = byPct.slice(0, 10);
-  const losers = byPct.slice(-10).reverse();      // 最惨的排第一
-  gainers.forEach((p, i) => { p.role = 'gainer'; p.rank = i + 1; });
-  losers.forEach((p, i) => { if (!p.role) { p.role = 'loser'; p.rank = i + 1; } });
-
-  const market = data.indices.find((i) => i.symbol === '^GSPC');
-  const capOf = (s) => s.stocks.reduce((a, x) => a + (x.cap ?? 0), 0);
-  const big = [...data.sectors].sort((a, b) => capOf(b) - capOf(a)).slice(0, 4);
-  const statues = [
-    { label: '标普 500', pct: market?.pct ?? 0, x: 960, base: 468, h: 370, main: true },
-    ...big.map((s, i) => ({ label: s.name, pct: s.pct, x: [530, 1390, 160, 1760][i], base: 472, h: 225 })),
-  ].map((st) => ({ ...st, kind: st.pct >= 0 ? 'bull' : 'bear' }));
-
-  const r = rng(7);
-  const skyline = Array.from({ length: 34 }, (_, i) => ({ x: i * 60 - 30 + r() * 30, w: 50 + r() * 70, h: 90 + r() * 230, seed: r() }));
-
-  return {
-    people, statues, skyline,
-    gainers: gainers.filter((p) => p.role === 'gainer'),
-    losers: losers.filter((p) => p.role === 'loser'),
-    market: market?.pct ?? 0,
-    date: data.session?.etDate ?? '',
-    tape: [...people].sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 40),
-  };
-}
 
 // ── 台上的站位 ────────────────────────────────────────────────────
 /** 第 n 名在哪条道。第一名居中，偶数名往左排，奇数名往右排 */
@@ -227,13 +166,6 @@ function heroLoser(pose, t, move) {
 }
 
 // ── 画 ────────────────────────────────────────────────────────────
-const statueCache = new Map();
-function statueImg(kind, h) {
-  const k = `${kind}:${h}`;
-  if (!statueCache.has(k)) statueCache.set(k, renderStatue(kind, h, 2));
-  return statueCache.get(k);
-}
-
 /** t：剧情时间。now：自由流动的时间，只管呼吸、晃动这些不影响剧情的小动作 */
 export function drawFrame(ctx, cast, t, now = t) {
   ctx.save();
@@ -297,7 +229,7 @@ export function drawFrame(ctx, cast, t, now = t) {
   drawHeroFlash(ctx, t);
   drawTexts(ctx, cast, t);
   drawCard(ctx, cast, t);
-  vignette(ctx, t);
+  vignette(ctx, 0.3 * ease.inOut(seg(t, T.hero, T.hero + 0.9)) * (1 - seg(t, 18.4, 19.4)));
   const dark = 1 - ease.out(seg(t, ...T.lights));
   if (dark > 0) { ctx.fillStyle = `rgba(0,0,0,${dark})`; ctx.fillRect(0, 0, W, H); }
 }
@@ -338,248 +270,6 @@ function shake(t, cast) {
   return { x, y };
 }
 
-// ── 天空、城市、跑马灯 ──────────────────────────────────────────────
-function drawSky(ctx, cast, t, now) {
-  const g = ctx.createLinearGradient(0, 0, 0, 560);
-  g.addColorStop(0, '#060818'); g.addColorStop(0.55, '#171338'); g.addColorStop(1, '#3d2453');
-  ctx.fillStyle = g;
-  ctx.fillRect(-400, -400, W + 800, 960);
-
-  // 星星
-  const r = rng(3);
-  for (let i = 0; i < 90; i++) {
-    const x = r() * W, y = r() * 330, tw = 0.4 + 0.6 * Math.abs(Math.sin(now * (0.5 + r()) + i));
-    ctx.fillStyle = `rgba(255,255,255,${0.5 * tw * r()})`;
-    ctx.fillRect(x, y, 1.6, 1.6);
-  }
-
-  // 城市剪影，带亮着的窗户
-  for (const b of cast.skyline) {
-    const top = 470 - b.h;
-    ctx.fillStyle = '#0c0d1e';
-    ctx.fillRect(b.x, top, b.w, b.h + 60);
-    const wr = rng(Math.floor(b.seed * 1e6));
-    ctx.fillStyle = 'rgba(255,214,140,0.55)';
-    for (let wy = top + 10; wy < 450; wy += 14) {
-      for (let wx = b.x + 6; wx < b.x + b.w - 8; wx += 11) if (wr() < 0.22) ctx.fillRect(wx, wy, 5, 7);
-    }
-  }
-
-  // 跑马灯：当天波动最大的 40 只滚过去
-  const y = 372, h = 34;
-  ctx.fillStyle = '#05060c';
-  ctx.fillRect(-400, y, W + 800, h);
-  ctx.save();
-  ctx.beginPath(); ctx.rect(-400, y, W + 800, h); ctx.clip();
-  ctx.font = `700 22px ${FONT}`;
-  ctx.textBaseline = 'middle';
-  let x = -((now * 90) % 4000);
-  for (let loop = 0; loop < 3; loop++) {
-    for (const p of cast.tape) {
-      const txt = `${p.sym} ${p.pct >= 0 ? '▲' : '▼'}${Math.abs(p.pct).toFixed(2)}%`;
-      ctx.fillStyle = p.pct >= 0 ? '#3dff9a' : '#ff5865';
-      ctx.fillText(txt, x, y + h / 2 + 1);
-      x += ctx.measureText(txt).width + 46;
-      if (x > W + 400) break;
-    }
-  }
-  ctx.restore();
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
-  ctx.fillRect(-400, y, W + 800, 2);
-}
-
-// ── 雕塑 ──────────────────────────────────────────────────────────
-function drawStatues(ctx, cast, t, now) {
-  cast.statues.forEach((st, i) => {
-    const order = st.main ? 0 : i;
-    const rise = ease.out(seg(t, 0.5 + order * 0.2, 1.9 + order * 0.2));
-    const img = statueImg(st.kind, st.h);
-    const up = st.pct >= 0;
-    const color = up ? '61,255,154' : '255,77,94';
-
-    // 背后的光晕，谢幕时变亮
-    const glowK = 0.35 + 0.65 * ease.inOut(seg(t, T.finale, T.finale + 1)) * (0.75 + 0.25 * Math.sin(now * 3));
-    const gr = ctx.createRadialGradient(st.x, st.base - st.h * 0.45, 10, st.x, st.base - st.h * 0.45, st.h * 1.1);
-    gr.addColorStop(0, `rgba(${color},${0.32 * glowK * rise})`);
-    gr.addColorStop(1, `rgba(${color},0)`);
-    ctx.fillStyle = gr;
-    ctx.fillRect(st.x - st.h * 1.2, st.base - st.h * 1.6, st.h * 2.4, st.h * 1.8);
-
-    // 从底座里升起来：画在底座顶面以上的部分才看得见
-    ctx.save();
-    ctx.beginPath(); ctx.rect(st.x - 600, -500, 1200, st.base + 500); ctx.clip();
-    const flip = st.x > W / 2 + 10 ? -1 : 1;               // 两边的都朝向中间
-    const roar = st.main ? Math.sin(Math.PI * seg(t, T.finale, T.finale + 0.6)) * 0.04 : 0;
-    ctx.translate(st.x, st.base + (1 - rise) * (st.h + 20));
-    ctx.scale(flip * (1 + roar), 1 + roar);
-    const w = img.width, h = img.height;
-    ctx.drawImage(img.canvas, -w / 2, -h + img.pad, w, h);
-    const shine = seg(t, 2.0 + order * 0.25, 2.9 + order * 0.25);
-    if (shine > 0 && shine < 1) glint(ctx, img, -w / 2, -h + img.pad, w, h, shine);
-    // 谢幕：眼睛亮起来
-    const eyeK = seg(t, T.finale + 0.2, T.finale + 0.8);
-    if (eyeK > 0) {
-      const ex = img.eye[0] - w / 2, ey = img.eye[1] - h + img.pad;
-      const eg = ctx.createRadialGradient(ex, ey, 0, ex, ey, st.h * 0.12);
-      eg.addColorStop(0, `rgba(255,255,255,${eyeK})`);
-      eg.addColorStop(0.25, `rgba(${color},${eyeK})`);
-      eg.addColorStop(1, `rgba(${color},0)`);
-      ctx.fillStyle = eg;
-      ctx.beginPath(); ctx.arc(ex, ey, st.h * 0.12, 0, Math.PI * 2); ctx.fill();
-      // 牛：鼻孔喷气
-      if (st.kind === 'bull') {
-        for (let j = 0; j < 6; j++) {
-          const life = ((now * 1.3 + j / 6) % 1);
-          const nx = img.nose[0] - w / 2 + life * st.h * 0.35, ny = img.nose[1] - h + img.pad + life * st.h * 0.05 - life * life * st.h * 0.1;
-          ctx.fillStyle = `rgba(230,236,255,${0.45 * (1 - life) * eyeK})`;
-          ctx.beginPath(); ctx.arc(nx, ny, st.h * (0.02 + life * 0.06), 0, Math.PI * 2); ctx.fill();
-        }
-      }
-    }
-    ctx.restore();
-
-    // 尘土
-    const dust = seg(t, 0.5 + order * 0.2, 2.2 + order * 0.2);
-    if (dust > 0 && dust < 1) {
-      const r = rng(hash(st.label));
-      for (let j = 0; j < 18; j++) {
-        const a = r() * Math.PI, sp = 40 + r() * 120;
-        const dx = Math.cos(a) * sp * dust * (r() < 0.5 ? -1 : 1), dy = -Math.sin(a) * sp * 0.4 * dust;
-        ctx.fillStyle = `rgba(200,180,160,${0.35 * (1 - dust)})`;
-        ctx.beginPath(); ctx.arc(st.x + dx * 2, st.base + dy, 6 + dust * 22 * r(), 0, Math.PI * 2); ctx.fill();
-      }
-    }
-
-    plinth(ctx, st, rise, color);
-  });
-}
-
-/** 一道斜光扫过雕塑表面。只亮在雕塑本身上，不亮背景 */
-let glintBuf = null;
-function glint(ctx, img, x, y, w, h, k) {
-  glintBuf ??= document.createElement('canvas');
-  const c = glintBuf;
-  c.width = img.canvas.width; c.height = img.canvas.height;
-  const g2 = c.getContext('2d');
-  g2.drawImage(img.canvas, 0, 0);
-  g2.globalCompositeOperation = 'source-atop';
-  const bx = (k * 1.6 - 0.3) * c.width;
-  const g = g2.createLinearGradient(bx - c.width * 0.18, 0, bx + c.width * 0.18, c.height * 0.4);
-  g.addColorStop(0, 'rgba(255,255,255,0)');
-  g.addColorStop(0.5, 'rgba(255,255,240,0.85)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  g2.fillStyle = g;
-  g2.fillRect(0, 0, c.width, c.height);
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.drawImage(c, x, y, w, h);
-  ctx.restore();
-}
-
-function plinth(ctx, st, rise, color) {
-  const w = st.main ? 330 : 230, h = st.main ? 74 : 56, top = st.base;
-  const g = ctx.createLinearGradient(0, top, 0, top + h);
-  g.addColorStop(0, '#5d5468'); g.addColorStop(1, '#2a2433');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(st.x - w / 2, top); ctx.lineTo(st.x + w / 2, top);
-  ctx.lineTo(st.x + w / 2 + 14, top + h); ctx.lineTo(st.x - w / 2 - 14, top + h); ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.12)';
-  ctx.fillRect(st.x - w / 2, top, w, 3);
-  // 刻字
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `800 ${st.main ? 24 : 18}px ${FONT}`;
-  ctx.fillStyle = '#d9d2e6';
-  ctx.fillText(st.label, st.x - (st.main ? 62 : 44), top + h / 2);
-  ctx.font = `900 ${st.main ? 28 : 21}px ${FONT}`;
-  ctx.fillStyle = `rgba(${color},${0.4 + 0.6 * rise})`;
-  ctx.fillText(`${st.pct >= 0 ? '+' : ''}${st.pct.toFixed(2)}%`, st.x + (st.main ? 70 : 52), top + h / 2);
-}
-
-// ── 地面和灯 ──────────────────────────────────────────────────────
-function drawGround(ctx, t) {
-  const g = ctx.createLinearGradient(0, 520, 0, H);
-  g.addColorStop(0, '#2b2238'); g.addColorStop(0.45, '#1b1625'); g.addColorStop(1, '#0d0a12');
-  ctx.fillStyle = g;
-  ctx.fillRect(-400, 520, W + 800, H);
-  // 舞台：一块亮一点的地板，带透视线
-  ctx.save();
-  ctx.globalAlpha = 0.5;
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-  ctx.lineWidth = 1;
-  for (let i = -12; i <= 12; i++) {
-    ctx.beginPath(); ctx.moveTo(960 + i * 40, 860); ctx.lineTo(960 + i * 180, H + 40); ctx.stroke();
-  }
-  for (const yy of [880, 920, 970, 1030]) { ctx.beginPath(); ctx.moveTo(-400, yy); ctx.lineTo(W + 400, yy); ctx.stroke(); }
-  ctx.restore();
-  // 台前一圈暖光
-  const pool = ctx.createRadialGradient(960, 990, 40, 960, 990, 900);
-  pool.addColorStop(0, `rgba(255,214,150,${0.16 * seg(t, 5, 7)})`);
-  pool.addColorStop(1, 'rgba(255,214,150,0)');
-  ctx.fillStyle = pool;
-  ctx.fillRect(-400, 700, W + 800, 500);
-}
-
-function drawSpotlights(ctx, t, now) {
-  const on = seg(t, ...T.lights);
-  if (!on) return;
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  const beams = [
-    { x: 260, color: '120,170,255' }, { x: 960, color: '255,230,170' }, { x: 1660, color: '255,140,200' },
-  ];
-  beams.forEach((b, i) => {
-    // 开场扫来扫去，之后对准台前
-    const sweep = Math.sin(now * 0.9 + i * 2) * 0.35 * (1 - seg(t, 4, 6)) + (960 - b.x) / 2400 * seg(t, 4, 6);
-    const len = 1250, spread = 0.2;
-    ctx.save();
-    ctx.translate(b.x, -60);
-    ctx.rotate(sweep);
-    const g = ctx.createLinearGradient(0, 0, 0, len);
-    g.addColorStop(0, `rgba(${b.color},${0.22 * on})`);
-    g.addColorStop(1, `rgba(${b.color},0)`);
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(14, 0); ctx.lineTo(len * spread, len); ctx.lineTo(-len * spread, len); ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  });
-  // 光里的浮尘
-  const r = rng(11);
-  for (let i = 0; i < 70; i++) {
-    const x = (r() * W + now * (6 + r() * 10)) % W, y = 80 + ((r() * 800 + now * (3 + r() * 6)) % 800);
-    ctx.fillStyle = `rgba(255,240,220,${0.18 * on * r()})`;
-    ctx.fillRect(x, y, 2, 2);
-  }
-  ctx.restore();
-}
-
-function glowRing(ctx, x, y, s, color, a) {
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  const g = ctx.createRadialGradient(x, y - s * 0.5, 0, x, y - s * 0.5, s * 0.9);
-  g.addColorStop(0, color + Math.round(a * 120).toString(16).padStart(2, '0'));
-  g.addColorStop(1, color + '00');
-  ctx.fillStyle = g;
-  ctx.fillRect(x - s, y - s * 1.5, s * 2, s * 2);
-  ctx.restore();
-}
-
-function nameTag(ctx, x, y, s, tag) {
-  const up = tag.pct >= 0;
-  const w = s * 0.9, h = s * 0.22;
-  ctx.save();
-  ctx.globalAlpha = tag.a;
-  ctx.fillStyle = up ? 'rgba(16,150,90,0.92)' : 'rgba(205,45,55,0.92)';
-  roundRect(ctx, x - w / 2, y - h, w, h, h / 2);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.font = `800 ${h * 0.55}px ${FONT}`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(`${tag.text} ${up ? '+' : ''}${tag.pct.toFixed(2)}%`, x, y - h / 2 + 1);
-  ctx.restore();
-}
-
 // ── 打击特效 ──────────────────────────────────────────────────────
 function drawImpacts(ctx, cast, t, which) {
   for (const g of cast.gainers.filter(which)) {
@@ -612,21 +302,6 @@ function drawImpacts(ctx, cast, t, which) {
       comic(ctx, x + (hero ? 150 : L.s * 0.3), y - L.s * (hero ? 1.25 : 1.0), (hero ? 0.95 : 0.45 + 0.2 * big) * pop, hero ? '啪！！！' : '啪！', fade, r() - 0.5);
     }
   }
-}
-
-function star(ctx, x, y, size, color, a, rot) {
-  if (size <= 0 || a <= 0) return;
-  ctx.save();
-  ctx.translate(x, y); ctx.rotate(rot);
-  ctx.globalAlpha = a;
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const rr = i % 2 ? size * 0.38 : size;
-    ctx.lineTo(Math.cos((i * Math.PI) / 4) * rr, Math.sin((i * Math.PI) / 4) * rr);
-  }
-  ctx.closePath(); ctx.fill();
-  ctx.restore();
 }
 
 /** 漫画拟声字：锯齿爆炸框 + 粗描边黄字 */
@@ -810,15 +485,6 @@ function drawCard(ctx, cast, t) {
   ctx.font = `600 18px ${FONT}`;
   ctx.fillText('us-market-pulse', x + w / 2, y + h - 18);
   ctx.restore();
-}
-
-function vignette(ctx, t) {
-  const hero = ease.inOut(seg(t, T.hero, T.hero + 0.9)) * (1 - seg(t, 18.4, 19.4));
-  const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
-  g.addColorStop(0, 'rgba(0,0,0,0)');
-  g.addColorStop(1, `rgba(0,0,0,${0.55 + 0.3 * hero})`);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
 }
 
 const fmt = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;

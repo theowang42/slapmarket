@@ -4,7 +4,7 @@ import { toast } from './dom.js';
  * 行情的单一数据源，两条节奏：
  *
  * - 全量（/api/overview）：指数、自选、标普 500 全部成分股。交易时段 30 秒一次。
- * - 快刷（/api/live）：只有指数和自选，十几只票。交易时段 5 秒一次，
+ * - 快刷（/api/live）：指数、自选、市值前 100。交易时段 5 秒一次，
  *   拿回来合并进全量快照里。人最盯着看的就是这几只，让它们先快起来。
  *
  * 视图不各自去 fetch，只订阅。订阅时可以声明不要快刷——财报、宽度页
@@ -54,8 +54,15 @@ async function refreshLive() {
     const res = await fetch('/api/live');
     const d = await res.json();
     if (d.error || !data) return;           // 快刷失败不弹提示，5 秒后还会再来；全量那条会报错
+    // 成分股只更新价格，其余字段（市值、财报日）留着全量那份
+    const fresh = d.stocks ?? {};
+    const sectors = data.sectors.map((s) => ({
+      ...s,
+      stocks: s.stocks.map((x) => (fresh[x.symbol] ? { ...x, last: fresh[x.symbol].last, pct: fresh[x.symbol].pct } : x)),
+    }));
     data = {
       ...data,
+      sectors,
       indices: mergeQuotes(data.indices, d.indices),
       watchlist: mergeQuotes(data.watchlist, d.watchlist),
       session: d.session,

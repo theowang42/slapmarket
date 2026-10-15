@@ -68,13 +68,25 @@ async function buildQuotes({ force = false } = {}) {
   return { indices, sectors, watchlist: watch.map((sym) => q[sym]).filter(Boolean), sources };
 }
 
-/** 快刷：只有指数和自选，十几只票一次请求拿完。前端交易时段 5 秒问一次。 */
+/**
+ * 快刷：指数、自选、市值前 100（首页台上那 20 个人就从这 100 里选）。
+ * 一百多只票，Yahoo 三个请求拿完。前端交易时段 5 秒问一次。
+ * 市值前 100 是谁，看上一轮全量报价；全量还没回来时先不带。
+ */
+const LIVE_TOP = 100;
+
 async function buildLive() {
   const watch = await getWatchlist(WATCHLIST);
-  const q = await fetchQuotes([...new Set([...INDICES.map((i) => i.symbol), ...watch])]);
+  const full = cache.get('quotes')?.value;
+  const top = full
+    ? full.sectors.flatMap((s) => s.stocks).sort((a, b) => b.cap - a.cap).slice(0, LIVE_TOP).map((x) => x.symbol)
+    : [];
+  const q = await fetchQuotes([...new Set([...INDICES.map((i) => i.symbol), ...watch, ...top])]);
+  const brief = ({ last, prev, change, pct, volume }) => ({ last, prev, change, pct, volume });
   return {
     indices: INDICES.map((i) => (q[i.symbol] ? { ...q[i.symbol], ...i } : null)).filter(Boolean),
     watchlist: watch.map((sym) => q[sym]).filter(Boolean),
+    stocks: Object.fromEntries(top.filter((s) => q[s]).map((s) => [s, brief(q[s])])),
   };
 }
 

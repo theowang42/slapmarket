@@ -6,7 +6,6 @@ import { fitCanvas } from './dom.js';
  * 好在 bar 是等距的，x 反推下标就是一次除法。
  */
 
-const css = (name) => getComputedStyle(document.body).getPropertyValue(name).trim();
 
 // left 要留出半根蜡烛，否则第一根会被画布左边切掉一半
 const PAD = { top: 10, right: 54, bottom: 20, left: 8 };
@@ -36,6 +35,9 @@ export const fmtFullTime = (time, intraday) => {
  * bars: [{t,time,o,h,l,c,v}]，intraday 决定横轴粒度和基准线。
  */
 export function drawChart(canvas, { bars, intraday, prevClose, hover = null }) {
+  // 颜色从画布自己身上取：同一页面里可能有不同主题的区域（首页舞台永远是暗的）
+  const style = getComputedStyle(canvas);
+  const css = (name) => style.getPropertyValue(name).trim();
   const { ctx, w, h } = fitCanvas(canvas);
   ctx.clearRect(0, 0, w, h);
   if (!bars?.length || w < 60 || h < 60) return null;

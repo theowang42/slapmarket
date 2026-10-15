@@ -9,7 +9,9 @@ npm start   # → http://localhost:5173
 
 零依赖，Node ≥ 18。行情来自 Yahoo Finance，新浪财经兜底，基本实时。`npm run check` 自检两个数据源。
 
-- **首页**：打开自动演一遍（25 秒），演完停在待机画面，牌子和荧光棒跟着实时行情变。`空格` 再演一遍，「录视频」直接下载整场
+- **首页（实时舞台）**：台前是"站着人的柱状图"——左边涨幅前十、右边跌幅前十，柱子高度就是涨跌幅，5 秒一刷，名次变了人会走着换位置。
+  鼠标悬停任何一个小人或雕塑看详情，点了右边滑出实时盘面（K 线、分时、指标；板块雕塑还列出板块里涨跌最猛的几只）
+- **收盘大戏**：25 秒的打屁股动画。`空格` 或右下角按钮随时演，页面开着时美股一收盘自动演一遍；「录视频」直接下载整场
 - **看盘**（`#/board`）：自选股一只一行（分时、日内 / 52 周区间、量比），侧栏是板块排行和异动
 - **财报 / 宽度 / 宏观**：未来两周财报、涨跌分布、美债商品汇率加密
 - 点任意一只票进个股页
@@ -26,6 +28,7 @@ lib/             market-data 行情入口（providers/ 下 yahoo 主、sina 备�
 scripts/         check-sources 数据源自检
 tests/           npm test
 public/js/       store 数据 · router · chrome 顶栏 · chart K 线 · widgets 小部件 · fmt · dom
-public/arena/    show 整场戏（时间轴 → 一帧）· person 小人 · statue 低多边形雕塑 · math
+public/arena/    live 实时舞台 · show 收盘大戏（时间轴 → 一帧）· drawer 侧边盘面 · cast 选角站位 ·
+                 backdrop 布景 · person 小人 · statue 低多边形雕塑 · math
 public/views/    arena 首页 · overview 看盘 · symbol · earnings · breadth · macro
 ```

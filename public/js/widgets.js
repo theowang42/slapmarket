@@ -1,4 +1,4 @@
-import { fmtPrice, fmtPct, dirClass, dirColor, daysBetween } from './fmt.js';
+import { fmtPrice, fmtPct, fmtCap, fmtVol, dirClass, dirColor, daysBetween } from './fmt.js';
 
 // 小部件：输入数据、返回一段 HTML 字符串的纯函数。多个视图共用的才放这里。
 
@@ -75,4 +75,22 @@ export function quoteFlags(q, today) {
 export function extHours(q) {
   if (!q.ext || q.ext.pct == null) return '';
   return `${q.ext.type === 'PRE' ? '盘前' : '盘后'} <b class="num">${fmtPrice(q.ext.last)}</b> <b class="num ${dirClass(q.ext.pct)}">${fmtPct(q.ext.pct)}</b>`;
+}
+
+/** 指标格子。null 一律显示 —，不要显示 0 或 NaN 冒充有数据。 */
+export function metricRows(q) {
+  const n = (v, digits = 2, suffix = '') => (v == null || !Number.isFinite(v) ? '—' : v.toFixed(digits) + suffix);
+  const cap = (v) => (v == null ? '—' : fmtCap(v));
+  return [
+    ['市盈率', n(q.pe)], ['远期市盈率', n(q.fpe)],
+    ['每股收益', n(q.eps)], ['预期 EPS', n(q.feps)],
+    ['市销率', n(q.psales)], ['股息率', n(q.dividendYield, 2, '%')],
+    ['Beta', n(q.beta)], ['ROE', n(q.roe, 1, '%')],
+    ['毛利率', n(q.grossMargin, 1, '%')], ['净利率', n(q.netMargin, 1, '%')],
+    ['负债/权益', n(q.debtToEquity, 1, '%')], ['营收 TTM', cap(q.revenueTTM)],
+    ['市值', cap(q.cap)], ['10 日均量', q.avgVol ? fmtVol(q.avgVol) : '—'],
+    ['今开', fmtPrice(q.open)], ['最高', fmtPrice(q.dayHi)],
+    // 指数不报成交量，给的是 0——同样别拿 0 冒充数据
+    ['最低', fmtPrice(q.dayLo)], ['成交量', q.volume ? fmtVol(q.volume) : '—'],
+  ];
 }
