@@ -73,6 +73,6 @@ export function quoteFlags(q, today) {
 
 /** 盘前 / 盘后价。正常交易时段返回空串。 */
 export function extHours(q) {
-  if (!q.ext || q.ext.pct == null || q.status === 'REG_MKT') return '';
+  if (!q.ext || q.ext.pct == null) return '';
   return `${q.ext.type === 'PRE_MKT' ? '盘前' : '盘后'} <b class="num">${fmtPrice(q.ext.last)}</b> <b class="num ${dirClass(q.ext.pct)}">${fmtPct(q.ext.pct)}</b>`;
 }

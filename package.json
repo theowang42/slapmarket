@@ -6,7 +6,10 @@
   "description": "美股盘中看板，以自选股为主。零依赖，本地运行。",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "check": "node scripts/check-sources.js"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }

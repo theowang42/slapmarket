@@ -50,7 +50,7 @@ export function breadth(host) {
     const weighted = capSum ? all.reduce((a, q) => a + q.pct * (q.cap ?? 0), 0) / capSum : 0;
     const gap = equal - weighted;
 
-    const spx = d.indices.find((i) => i.symbol === '.SPX');
+    const spx = d.indices.find((i) => i.symbol === '^GSPC');
     const gapNote = Math.abs(gap) < 0.15
       ? '涨跌普遍，指数没有被少数股票带偏'
       : gap < 0

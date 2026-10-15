@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   WATCHLIST, INDICES, SECTORS, MACRO, CACHE_TTL, PORT, HOST, HOLDINGS_TTL_HOURS, MARKET_CLOSURES,
 } from './config.js';
-import { fetchQuotes, fetchQuoteDetail, fetchBars, fetchSpark, lastSessionOnly, RANGES } from './lib/cnbc.js';
+import { fetchQuotes, fetchQuoteDetail, fetchBars, fetchSpark, RANGES } from './lib/market-data.js';
 import { getHoldings } from './lib/holdings.js';
 import { marketSession } from './lib/market-hours.js';
 import { getWatchlist, setWatchlist, normalize as normalizeWatch, MAX as WATCH_MAX } from './lib/watchlist.js';
@@ -61,7 +61,9 @@ async function buildQuotes({ force = false } = {}) {
     return { key: s.key, name: s.name, etf: s.etf, pct: q[s.etf]?.pct ?? 0, stocks };
   }).filter((s) => s.stocks.length);
 
-  return { indices, sectors, watchlist: watch.map((sym) => q[sym]).filter(Boolean) };
+  const sources = {};
+  for (const x of Object.values(q)) sources[x.source] = (sources[x.source] ?? 0) + 1;
+  return { indices, sectors, watchlist: watch.map((sym) => q[sym]).filter(Boolean), sources };
 }
 
 /** 指数条 + 自选的当日分时。自选一改，'sparks' 缓存要跟着清。 */
@@ -102,15 +104,12 @@ async function buildMacro() {
 
 // ── 个股 ──────────────────────────────────────────────────────────
 async function buildSymbol(symbol, range) {
-  const cfg = RANGES[range];
-  // 报价和 K 线分开缓存：报价 60 秒该刷，几年的日线不必跟着刷
-  const [quote, raw] = await Promise.all([
+  // 报价和 K 线分开缓存：报价要勤刷，几年的日线不必跟着刷
+  const [quote, bars] = await Promise.all([
     cached(`q:${symbol}`, CACHE_TTL.quotes, () => fetchQuoteDetail(symbol)),
-    cached(`b:${symbol}:${cfg.src}`, CACHE_TTL.charts, () => fetchBars(symbol, cfg.src)).catch(() => []),
+    cached(`b:${symbol}:${range}`, CACHE_TTL.charts, () => fetchBars(symbol, range)).catch(() => []),
   ]);
-  let bars = cfg.todayOnly ? lastSessionOnly(raw) : raw;
-  if (cfg.tail) bars = bars.slice(-cfg.tail);
-  return { quote, bars, range, intraday: !!cfg.intraday };
+  return { quote, bars, range, intraday: !!RANGES[range].intraday };
 }
 
 // ── 自选 ──────────────────────────────────────────────────────────
@@ -165,8 +164,8 @@ const API = {
   'GET /api/symbol': (url) => {
     const sym = (url.searchParams.get('s') ?? '').trim().toUpperCase();
     const range = (url.searchParams.get('range') ?? '1D').toUpperCase();
-    // 符号直接进上游 URL，限死字符集和长度。CNBC 的写法里有 . = @（.SPX、BRK.B）
-    if (!/^[A-Z0-9.\-=@]{1,12}$/.test(sym)) throw new BadRequest('符号不合法');
+    // 符号直接进上游 URL，限死字符集和长度。Yahoo 的写法里有 ^ = - .（^GSPC、CL=F、BTC-USD）
+    if (!/^[A-Z0-9.\-=^]{1,12}$/.test(sym)) throw new BadRequest('符号不合法');
     if (!RANGES[range]) throw new BadRequest(`不支持的区间 ${range}`);
     return buildSymbol(sym, range);
   },

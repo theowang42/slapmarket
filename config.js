@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // 唯一需要手改的文件。改完存盘刷新页面即可，不用重启。
-// 行情符号用 CNBC 写法：股票直接写 ticker，A/B 股用点号（BRK.B），
-// 指数前面带点（.SPX）。
+// 行情代码用 Yahoo 写法：股票直接写 ticker，B 股用横杠（BRK-B），
+// 指数带 ^（^GSPC），期货 =F，汇率 =X，加密 -USD。
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -14,16 +14,16 @@
 // 美股市值前十，按 2026-10 中旬的市值排序
 export const WATCHLIST = [
   'NVDA', 'AAPL', 'GOOGL', 'MSFT', 'AMZN',
-  'SPCX', 'META', 'AVGO', 'TSLA', 'BRK.B',
+  'SPCX', 'META', 'AVGO', 'TSLA', 'BRK-B',
 ];
 
 /** 顶部大盘指数。invert 表示"涨=市场变差"，配色会反过来。 */
 export const INDICES = [
-  { symbol: '.SPX', name: 'S&P 500' },
-  { symbol: '.IXIC', name: 'NASDAQ' },
-  { symbol: '.DJI', name: 'DOW' },
-  { symbol: '.RUT', name: 'RUSSELL 2000' },
-  { symbol: '.VIX', name: 'VIX', invert: true },
+  { symbol: '^GSPC', name: 'S&P 500' },
+  { symbol: '^IXIC', name: 'NASDAQ' },
+  { symbol: '^DJI', name: 'DOW' },
+  { symbol: '^RUT', name: 'RUSSELL 2000' },
+  { symbol: '^VIX', name: 'VIX', invert: true },
 ];
 
 /**
@@ -61,31 +61,31 @@ export const SECTORS = [
 export const MACRO = [
   {
     key: 'rates', name: '美债收益率', bp: true, items: [
-      { symbol: 'US2Y', name: '2 年' },
-      { symbol: 'US5Y', name: '5 年' },
-      { symbol: 'US10Y', name: '10 年' },
-      { symbol: 'US30Y', name: '30 年' },
+      { symbol: '^IRX', name: '13 周' },
+      { symbol: '^FVX', name: '5 年' },
+      { symbol: '^TNX', name: '10 年' },
+      { symbol: '^TYX', name: '30 年' },
     ],
   },
   {
     key: 'commodity', name: '商品', items: [
-      { symbol: '@CL.1', name: 'WTI 原油' },
-      { symbol: '@GC.1', name: '黄金' },
-      { symbol: '@SI.1', name: '白银' },
-      { symbol: '@NG.1', name: '天然气' },
+      { symbol: 'CL=F', name: 'WTI 原油' },
+      { symbol: 'GC=F', name: '黄金' },
+      { symbol: 'SI=F', name: '白银' },
+      { symbol: 'NG=F', name: '天然气' },
     ],
   },
   {
     key: 'fx', name: '美元 / 汇率', items: [
-      { symbol: '.DXY', name: '美元指数' },
-      { symbol: 'EUR=', name: '欧元 / 美元' },
-      { symbol: 'JPY=', name: '美元 / 日元' },
+      { symbol: 'DX-Y.NYB', name: '美元指数' },
+      { symbol: 'EURUSD=X', name: '欧元 / 美元' },
+      { symbol: 'JPY=X', name: '美元 / 日元' },
     ],
   },
   {
     key: 'crypto', name: '加密', items: [
-      { symbol: 'BTC=', name: '比特币' },
-      { symbol: 'ETH=', name: '以太坊' },
+      { symbol: 'BTC-USD', name: '比特币' },
+      { symbol: 'ETH-USD', name: '以太坊' },
     ],
   },
 ];
@@ -102,8 +102,8 @@ export const HOLDINGS_TTL_HOURS = 12;
  */
 export const MARKET_CLOSURES = {};
 
-/** 服务端行情缓存秒数。数据本身就有延迟，压太低只会白白多打接口。 */
-export const CACHE_TTL = { quotes: 60, charts: 180 };
+/** 服务端行情缓存秒数。前端交易时段 30 秒刷一次，报价跟着它；分时图不必那么勤。 */
+export const CACHE_TTL = { quotes: 30, charts: 120 };
 
 export const PORT = process.env.PORT || 5173;
 

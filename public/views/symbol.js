@@ -100,10 +100,8 @@ export function symbol(host, { sym }) {
 
     $('sym-ext').innerHTML = extHours(q);
 
-    const e = q.events ?? {};
-    $('sym-flags').innerHTML = (e.halted ? '<span class="flag warn">停牌</span>' : '')
-      + quoteFlags(q, etToday())
-      + (e.exDivDate && e.divAmount ? `<span class="flag">除息 ${e.exDivDate} $${e.divAmount}</span>` : '');
+    $('sym-flags').innerHTML = quoteFlags(q, etToday())
+      + (q.exDivDate && q.divAmount ? `<span class="flag">除息 ${q.exDivDate} · 年息 $${q.divAmount}</span>` : '');
   }
 
   function renderMetrics(q) {
@@ -120,8 +118,8 @@ export function symbol(host, { sym }) {
     $('r52').innerHTML = `
       <div class="r52-track"><i class="r52-mark" style="left:${(pos * 100).toFixed(1)}%"></i></div>
       <div class="r52-ends">
-        <span><b class="num">${fmtPrice(lo)}</b><em>${q.yrLoDate ?? ''}</em></span>
-        <span class="r52-right"><b class="num">${fmtPrice(hi)}</b><em>${q.yrHiDate ?? ''}</em></span>
+        <span><b class="num">${fmtPrice(lo)}</b><em>52 周低</em></span>
+        <span class="r52-right"><b class="num">${fmtPrice(hi)}</b><em>52 周高</em></span>
       </div>`;
   }
 

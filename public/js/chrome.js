@@ -57,7 +57,10 @@ function render(d) {
     <span class="down">${b.down}</span>`;
 
   const at = new Date(d.fetchedAt).toLocaleTimeString('zh-CN', { hour12: false });
-  $('meta').textContent = `更新 ${at} · 延迟约 15 分钟 · R 刷新`;
+  // 数据来自哪家。正常全是 Yahoo；出现新浪说明 Yahoo 有票没拿到，值得让人知道
+  const { yahoo = 0, sina = 0 } = d.sources ?? {};
+  const src = sina ? (yahoo ? `Yahoo + 新浪 ${sina} 只` : '新浪（Yahoo 不可用）') : 'Yahoo';
+  $('meta').textContent = `更新 ${at} · ${src} · R 刷新`;
 }
 
 // ── 白天 / 夜间。默认白天，选了夜间就记住。 ──────────────────

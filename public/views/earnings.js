@@ -69,7 +69,7 @@ export function earnings(host) {
               <span class="cal-sym">${q.symbol}</span>
               <span class="cal-name">${q.name ?? ''}</span>
               <span class="cal-sec">${q.sector}</span>
-              <span class="cal-when">${when}${q.earnings.est ? '<i class="cal-est" title="交易所未定档，CNBC 推算">预估</i>' : ''}</span>
+              <span class="cal-when">${when}${q.earnings.est ? '<i class="cal-est" title="公司还没正式公布，日期是推算的">预估</i>' : ''}</span>
               <span class="cal-cap num">${q.cap ? fmtCap(q.cap) : '—'}</span>
               <span class="cal-px num">${fmtPrice(q.last)}</span>
               <span class="cal-pct num ${dirClass(q.pct)}">${fmtPct(q.pct)}</span>
