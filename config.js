@@ -28,11 +28,11 @@ export const INDICES = [
  * 板块 = 11 只 SPDR 行业 ETF。
  *
  * 成分股不用写：服务端每天从 SSGA 官网拉这些 ETF 的官方每日持仓，
- * 按权重自动选出画进热力图的那些。指数调仓、并购退市都会自动跟上。
+ * 按权重自动选出成分股（异动榜、财报、宽度页都用它）。指数调仓、并购退市都会自动跟上。
  *
- * pin —— 例外通道。这里写的代码一定会画进该板块，不管它在不在 ETF 持仓里。
+ * pin —— 例外通道。这里写的代码一定会算进该板块，不管它在不在 ETF 持仓里。
  *        用来放刚上市、还没被纳入标普 500 的公司（新股通常要满一年才有资格）。
- *        pin 进来的票没有权重，只按市值决定方块大小。
+ *        pin 进来的票没有权重。
  */
 export const SECTORS = [
   { key: 'tech', name: '科技', etf: 'XLK' },
@@ -89,9 +89,8 @@ export const MACRO = [
 ];
 
 /**
- * 每个板块画多少只。按权重从大到小累加，覆盖到 coverage 就停，
- * 再用 min/max 夹住。集中度高的板块自然少画几只，分散的多画几只。
- * 想让图更密就调高 coverage 或 max。
+ * 每个板块取多少只。按权重从大到小累加，覆盖到 coverage 就停，
+ * 再用 min/max 夹住。集中度高的板块自然少取几只，分散的多取几只。
  */
 export const HOLDINGS_PICK = { coverage: 0.85, min: 5, max: 18 };
 
@@ -106,9 +105,6 @@ export const HOLDINGS_TTL_HOURS = 12;
  *   '2025-01-09': '卡特总统国葬'
  */
 export const MARKET_CLOSURES = {};
-
-/** 热力图配色的饱和上限（百分比）。±3% 到最深，日内看着对比最舒服。 */
-export const HEAT_CLAMP = 3;
 
 /** 服务端行情缓存秒数。数据本身就有延迟，压太低只会白白多打接口。 */
 export const CACHE_TTL = { quotes: 60, charts: 180 };

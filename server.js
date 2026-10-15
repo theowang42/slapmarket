@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  WATCHLIST, INDICES, SECTORS, MACRO, HEAT_CLAMP, CACHE_TTL, PORT, HOST,
+  WATCHLIST, INDICES, SECTORS, MACRO, CACHE_TTL, PORT, HOST,
   HOLDINGS_PICK, HOLDINGS_TTL_HOURS, MARKET_CLOSURES,
 } from './config.js';
 import { getHoldings } from './lib/holdings.js';
@@ -74,6 +74,10 @@ function normalizeQuote(q) {
     // 批量报价里本来就带 EventData（URL 上有 events=1），白拿的，
     // 财报日历整页就靠这一个字段，不用额外打接口
     earnings: parseEarnings(q.EventData),
+    // 自选卡片要画日内区间和 52 周区间。几个数而已，跟着批量报价一起带上
+    dayHi: nz(q.high), dayLo: nz(q.low),
+    yrHi: nz(q.yrhiprice), yrLo: nz(q.yrloprice),
+    avgVol: parseCap(q.tendayavgvol),
   };
 }
 
@@ -315,9 +319,12 @@ async function buildMacroSparks() {
   return Object.fromEntries(entries);
 }
 
+/** 指数条 + 自选卡片的当日分时。自选一改，'charts' 缓存要跟着清。 */
 async function buildSparks() {
-  const entries = await Promise.all(INDICES.map(async (i) => {
-    try { return [i.symbol, await fetchSpark(i.symbol)]; } catch { return [i.symbol, []]; }
+  const watch = await getWatchlist(WATCHLIST);
+  const symbols = [...new Set([...INDICES.map((i) => i.symbol), ...watch])];
+  const entries = await Promise.all(symbols.map(async (s) => {
+    try { return [s, await fetchSpark(s)]; } catch { return [s, []]; }
   }));
   return Object.fromEntries(entries);
 }
@@ -391,8 +398,8 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({
         ...q,
         indices: q.indices.map((i) => ({ ...i, spark: sparks[i.symbol] ?? [] })),
+        watchlist: q.watchlist.map((w) => ({ ...w, spark: sparks[w.symbol] ?? [] })),
         session: marketSession(),
-        heatClamp: HEAT_CLAMP,
         fetchedAt: Date.now(),
       }));
     } catch (e) {
@@ -425,6 +432,7 @@ const server = http.createServer(async (req, res) => {
 
       const list = await setWatchlist(wanted);
       cache.delete('quotes');           // 让下一次 /api/overview 立刻带上新列表
+      cache.delete('charts');           // 新加的票也要有分时
       return json(200, { symbols: list });
     } catch (e) {
       return json(400, { error: String(e?.message ?? e) });
