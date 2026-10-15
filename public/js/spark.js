@@ -26,7 +26,7 @@ export function sparkSvg({ pts, prev, stroke, w = 300, h = 34, gid, cls = 'idx-s
         <stop offset="1" stop-color="${stroke}" stop-opacity="0"/>
       </linearGradient></defs>
       ${area ? `<path d="${area}" fill="url(#${gid})"/>` : ''}
-      ${prevY != null && isFinite(prevY) ? `<line x1="0" x2="${w}" y1="${prevY.toFixed(1)}" y2="${prevY.toFixed(1)}" stroke="rgba(255,255,255,.16)" stroke-width="1" stroke-dasharray="2 3"/>` : ''}
+      ${prevY != null && isFinite(prevY) ? `<line x1="0" x2="${w}" y1="${prevY.toFixed(1)}" y2="${prevY.toFixed(1)}" style="stroke:var(--guide)" stroke-width="1" stroke-dasharray="2 3"/>` : ''}
       ${line ? `<path d="${line}" fill="none" stroke="${stroke}" stroke-width="1.4" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` : ''}
     </svg>`;
 }

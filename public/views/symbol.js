@@ -234,6 +234,8 @@ export function symbol(host, { sym }) {
   host.querySelector('.sym-back').addEventListener('click', back);
   const onKey = (ev) => { if (ev.key === 'Escape') back(); };
   window.addEventListener('keydown', onKey);
+  // canvas 的颜色是画的时候读的，切白天/夜间不会自己变，得重画
+  window.addEventListener('themechange', paint);
 
   // 同板块列表里点别的票，直接换页
   $('peers').addEventListener('click', (ev) => {
@@ -259,5 +261,6 @@ export function symbol(host, { sym }) {
     unsubscribe();
     stopResize();
     window.removeEventListener('keydown', onKey);
+    window.removeEventListener('themechange', paint);
   };
 }

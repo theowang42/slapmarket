@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "美股大盘 / 板块热力图看板 —— 暗色极简，开盘后打开就能看的那种",
+  "description": "美股盘中看板，自选股为主 —— 暗色极简，开盘后打开就能看的那种",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
