@@ -135,6 +135,6 @@ export function breadth(host) {
       </div>`).join('');
   }
 
-  const unsubscribe = subscribe(render);
+  const unsubscribe = subscribe(render, { live: false });
   return () => unsubscribe();
 }

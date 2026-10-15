@@ -102,8 +102,11 @@ export const HOLDINGS_TTL_HOURS = 12;
  */
 export const MARKET_CLOSURES = {};
 
-/** 服务端行情缓存秒数。前端交易时段 30 秒刷一次，报价跟着它；分时图不必那么勤。 */
-export const CACHE_TTL = { quotes: 30, charts: 120 };
+/**
+ * 服务端缓存秒数。缓存是给"多开几个标签页"挡着的，不是用来省延迟的：
+ * live 是指数 + 自选的快刷，前端交易时段 5 秒问一次，缓存要比它短。
+ */
+export const CACHE_TTL = { live: 3, quotes: 30, charts: 120, details: 3600 };
 
 export const PORT = process.env.PORT || 5173;
 

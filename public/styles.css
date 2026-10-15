@@ -687,6 +687,12 @@ body {
 .idx:hover { border-color: var(--line-strong); }
 
 /* ── 载入动效：克制，只做一次淡入 ──────────────────────────── */
+/* 快刷后价格变了：数字底色闪一下，一秒内褪掉 */
+.tick-up { animation: tick-up 1s ease-out; }
+.tick-down { animation: tick-down 1s ease-out; }
+@keyframes tick-up { from { background: color-mix(in srgb, var(--up) 28%, transparent); } to { background: transparent; } }
+@keyframes tick-down { from { background: color-mix(in srgb, var(--down) 28%, transparent); } to { background: transparent; } }
+.wc-last, .idx-price { border-radius: 4px; padding: 0 3px; margin: 0 -3px; }
 .fade-in { animation: fade .45s ease both; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 

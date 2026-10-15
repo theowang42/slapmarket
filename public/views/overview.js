@@ -36,19 +36,32 @@ export function overview(host) {
   const $ = (id) => host.querySelector(`#${id}`);
   let data = null;      // 最近一次快照，增删自选时拿当前列表
   let editing = false;  // 自选面板是否在编辑态
+  let painted = false;  // 淡入动画只在第一次画的时候放，5 秒一次的快刷再放就成了闪屏
+
+  // 上一次画出来的价格。快刷后价格变了，就让那个数字闪一下绿或红
+  const lastPx = new Map();
+  function tick(sym, px) {
+    const prev = lastPx.get(sym);
+    lastPx.set(sym, px);
+    return prev == null || px == null || prev === px ? '' : px > prev ? ' tick-up' : ' tick-down';
+  }
+  const enter = () => (painted ? '' : ' fade-in');
+
+  /** 分时线是 2 分钟前的，末尾接上最新价，线头才跟得上数字 */
+  const live = (q) => (q.spark?.length ? [...q.spark, q.last] : q.spark);
 
   function renderIndices(d) {
     $('indices').innerHTML = d.indices.map((ix, n) => {
       const cls = dirClass(ix.pct, ix.invert);
       return `
-        <div class="idx fade-in" data-sym="${ix.symbol}" style="animation-delay:${n * 45}ms">
+        <div class="idx${enter()}" data-sym="${ix.symbol}" style="animation-delay:${n * 45}ms">
           <div class="idx-name">${ix.name}</div>
           <div class="idx-row">
-            <span class="idx-price num">${fmtPrice(ix.last)}</span>
+            <span class="idx-price num${tick(ix.symbol, ix.last)}">${fmtPrice(ix.last)}</span>
             <span class="idx-chg num ${cls}">${fmtPct(ix.pct)}</span>
           </div>
           <div class="idx-sub num">${fmtChg(ix.change)}</div>
-          ${sparkSvg({ pts: ix.spark, prev: ix.prev, stroke: dirColor(cls), gid: `g${n}` })}
+          ${sparkSvg({ pts: live(ix), prev: ix.prev, stroke: dirColor(cls), gid: `g${n}` })}
         </div>`;
     }).join('');
   }
@@ -86,7 +99,7 @@ export function overview(host) {
     const volPct = q.volume != null && q.avgVol ? (q.volume / q.avgVol) * 100 : null;
     // 一行四段：身份 | 价格 | 分时（吃掉剩余宽度）| 区间和成交量
     return `
-      <div class="wcard fade-in${editing ? ' is-editing' : ''}" data-sym="${q.symbol}" style="animation-delay:${i * 30}ms">
+      <div class="wcard${editing ? ' is-editing' : ''}${enter()}" data-sym="${q.symbol}" style="animation-delay:${i * 30}ms">
         ${editing ? `<button class="wc-del" data-del="${q.symbol}" title="移除 ${q.symbol}">×</button>` : ''}
         <div class="wc-id">
           <span class="wc-sym">${q.symbol}</span>
@@ -94,11 +107,11 @@ export function overview(host) {
           <span class="wc-flags">${quoteFlags(q, today)}</span>
         </div>
         <div class="wc-px">
-          <span class="wc-last num">${fmtPrice(q.last)}</span>
+          <span class="wc-last num${tick(q.symbol, q.last)}">${fmtPrice(q.last)}</span>
           <span class="wc-chg num ${cls}">${fmtChg(q.change)}&nbsp;&nbsp;${fmtPct(q.pct)}</span>
           ${ext ? `<span class="wc-ext">${ext}</span>` : ''}
         </div>
-        ${sparkSvg({ pts: q.spark, prev: q.prev, stroke: dirColor(cls), w: 600, h: 56, gid: `w${i}`, cls: 'wc-spark' })}
+        ${sparkSvg({ pts: live(q), prev: q.prev, stroke: dirColor(cls), w: 600, h: 56, gid: `w${i}`, cls: 'wc-spark' })}
         <div class="wc-stats">
           ${rangeBar('日内', q.dayLo, q.dayHi, q.last)}
           ${rangeBar('52 周', q.yrLo, q.yrHi, q.last)}
@@ -125,7 +138,7 @@ export function overview(host) {
       ? '<div class="wc-empty">还没有自选。点右上角「编辑」加几只。</div>'
       : '';
     // 轮询会重绘整个面板。不把输入框的内容和光标接过去的话，
-    // 交易时段每 30 秒就会把用户正在打的代码清空一次。
+    // 交易时段每 5 秒就会把用户正在打的代码清空一次。
     const old = $('watch-input');
     const keep = old
       ? { value: old.value, focused: document.activeElement === old, caret: old.selectionStart }
@@ -208,12 +221,13 @@ export function overview(host) {
   });
 
   // ── 生命周期 ────────────────────────────────────────────────
-  function render(d) {
+  /** 快刷只带指数和自选，板块和异动等全量那一轮再画 */
+  function render(d, kind) {
     data = d;
     renderIndices(d);
-    renderSectors(d);
-    renderMovers(d);
     renderWatch(d);
+    if (kind === 'full') { renderSectors(d); renderMovers(d); }
+    painted = true;
   }
 
   const unsubscribe = subscribe(render);

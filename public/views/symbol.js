@@ -157,7 +157,9 @@ export function symbol(host, { sym }) {
   }
 
   // ── 取数 ────────────────────────────────────────────────────
+  let busy = false;        // 全量和快刷可能同一刻到，别对同一只票连发两次
   async function load() {
+    busy = true;
     try {
       const res = await fetch(`/api/symbol?s=${encodeURIComponent(sym)}&range=${range}`);
       const d = await res.json();
@@ -171,6 +173,8 @@ export function symbol(host, { sym }) {
       if (!alive) return;
       toast(`${sym} 加载失败：${e.message}`);
       if (!payload) $('sym-name').textContent = `加载失败：${e.message}`;
+    } finally {
+      busy = false;
     }
   }
 
@@ -230,11 +234,12 @@ export function symbol(host, { sym }) {
   const stopResize = onResize(canvas, paint);
 
   // 借总览的轮询节奏：store 一更新说明该刷了，顺手把这只也刷一遍。
+  // 快刷也跟着——服务端报价缓存只有几秒，K 线和基本面另有长缓存，不会多打上游。
   // 首次回调是订阅时的当前快照，那时 load() 已经在路上，别重复打。
   let first = true;
   const unsubscribe = subscribe(() => {
     if (first) { first = false; renderPeers(); return; }
-    load();
+    if (!busy) load();
   });
 
   load();

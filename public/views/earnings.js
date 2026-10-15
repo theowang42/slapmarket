@@ -84,6 +84,6 @@ export function earnings(host) {
     if (row) location.hash = `#/s/${encodeURIComponent(row.dataset.sym)}`;
   });
 
-  const unsubscribe = subscribe(render);
+  const unsubscribe = subscribe(render, { live: false });
   return () => unsubscribe();
 }

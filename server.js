@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   WATCHLIST, INDICES, SECTORS, MACRO, CACHE_TTL, PORT, HOST, HOLDINGS_TTL_HOURS, MARKET_CLOSURES,
 } from './config.js';
-import { fetchQuotes, fetchQuoteDetail, fetchBars, fetchSpark, RANGES } from './lib/market-data.js';
+import { fetchQuotes, fetchDetails, fetchBars, fetchSpark, RANGES } from './lib/market-data.js';
 import { getHoldings } from './lib/holdings.js';
 import { marketSession } from './lib/market-hours.js';
 import { getWatchlist, setWatchlist, normalize as normalizeWatch, MAX as WATCH_MAX } from './lib/watchlist.js';
@@ -66,6 +66,16 @@ async function buildQuotes({ force = false } = {}) {
   return { indices, sectors, watchlist: watch.map((sym) => q[sym]).filter(Boolean), sources };
 }
 
+/** 快刷：只有指数和自选，十几只票一次请求拿完。前端交易时段 5 秒问一次。 */
+async function buildLive() {
+  const watch = await getWatchlist(WATCHLIST);
+  const q = await fetchQuotes([...new Set([...INDICES.map((i) => i.symbol), ...watch])]);
+  return {
+    indices: INDICES.map((i) => (q[i.symbol] ? { ...q[i.symbol], ...i } : null)).filter(Boolean),
+    watchlist: watch.map((sym) => q[sym]).filter(Boolean),
+  };
+}
+
 /** 指数条 + 自选的当日分时。自选一改，'sparks' 缓存要跟着清。 */
 async function buildSparks() {
   const watch = await getWatchlist(WATCHLIST);
@@ -104,12 +114,15 @@ async function buildMacro() {
 
 // ── 个股 ──────────────────────────────────────────────────────────
 async function buildSymbol(symbol, range) {
-  // 报价和 K 线分开缓存：报价要勤刷，几年的日线不必跟着刷
-  const [quote, bars] = await Promise.all([
-    cached(`q:${symbol}`, CACHE_TTL.quotes, () => fetchQuoteDetail(symbol)),
+  // 三样东西分开缓存：报价几秒一刷，K 线一两分钟，基本面一天都不怎么变
+  const [q, details, bars] = await Promise.all([
+    cached(`q:${symbol}`, CACHE_TTL.live, () => fetchQuotes([symbol])),
+    // 基本面拿不到就空着，不缓存失败，下次再试
+    cached(`d:${symbol}`, CACHE_TTL.details, () => fetchDetails(symbol)).catch(() => ({})),
     cached(`b:${symbol}:${range}`, CACHE_TTL.charts, () => fetchBars(symbol, range)).catch(() => []),
   ]);
-  return { quote, bars, range, intraday: !!RANGES[range].intraday };
+  if (!q[symbol]) throw new Error(`找不到 ${symbol}`);
+  return { quote: { ...q[symbol], ...details }, bars, range, intraday: !!RANGES[range].intraday };
 }
 
 // ── 自选 ──────────────────────────────────────────────────────────
@@ -129,8 +142,8 @@ async function saveWatchlist(body) {
   }
 
   const symbols = await setWatchlist(wanted);
-  cache.delete('quotes');           // 让下一次 /api/overview 立刻带上新列表
-  cache.delete('sparks');           // 新加的票也要有分时
+  // 让下一次请求立刻带上新列表，新加的票也要有分时
+  for (const k of ['quotes', 'live', 'sparks']) cache.delete(k);
   return { symbols };
 }
 
@@ -157,6 +170,7 @@ const API = {
     if (force) cache.clear();
     return overview({ force });
   },
+  'GET /api/live': () => cached('live', CACHE_TTL.live, buildLive),
   'GET /api/macro': async (url) => {
     if (url.searchParams.has('force')) cache.delete('macro');
     return { groups: await cached('macro', CACHE_TTL.quotes, buildMacro) };

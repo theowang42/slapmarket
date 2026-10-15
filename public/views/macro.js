@@ -71,7 +71,7 @@ export function macro(host) {
   const unsubscribe = subscribe(() => {
     if (first) { first = false; return; }
     load();
-  });
+  }, { live: false });
 
   load();
 
