@@ -58,9 +58,9 @@ function render(d) {
     <span class="down">${b.down}</span>`;
 
   const at = new Date(d.fetchedAt).toLocaleTimeString('zh-CN', { hour12: false });
-  // 数据来自哪家。正常全是 Yahoo；出现新浪说明 Yahoo 有票没拿到，值得让人知道
+  // 数据来自哪家。正常是新浪为主、Yahoo 补几只
   const { yahoo = 0, sina = 0 } = d.sources ?? {};
-  const src = sina ? (yahoo ? `Yahoo + 新浪 ${sina} 只` : '新浪（Yahoo 不可用）') : 'Yahoo';
+  const src = [sina && `新浪 ${sina}`, yahoo && `Yahoo ${yahoo}`].filter(Boolean).join(' + ') || '—';
   $('meta').textContent = `更新 ${at} · ${src} · R 刷新`;
 }
 

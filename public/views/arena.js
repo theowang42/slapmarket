@@ -77,17 +77,23 @@ export function arena(host) {
     return { x: (px - view.ox) / view.k, y: (py - view.oy) / view.k };
   }
 
-  // 每秒看一次这一秒的平均帧耗时，决定要不要调画质
-  const perf = { last: 0, sum: 0, n: 0, since: 0, good: 0 };
+  /**
+   * 每秒看一次这一秒的平均帧耗时，决定要不要调画质。
+   * - 低于 30 帧才降，最多降到 75%——再低字就糊了，比卡还难受
+   * - 高于 50 帧连续 3 秒就升回去。注意普通屏幕刷新率是 60Hz，每帧最快也要 16.7ms，
+   *   门槛定得比这还严的话（之前是 15ms）画质降了就永远回不来
+   * - 刚打开的头 3 秒不算：那时在生成雕塑、天空这些缓存，本来就慢
+   */
+  const perf = { last: 0, sum: 0, n: 0, since: 0, good: 0, born: performance.now() };
   function tune(nowMs) {
     if (perf.last) { perf.sum += nowMs - perf.last; perf.n++; }
     perf.last = nowMs;
     if (nowMs - perf.since < 1000 || recorder) return;
     const avg = perf.sum / Math.max(1, perf.n);
     perf.sum = 0; perf.n = 0; perf.since = nowMs;
-    if (document.hidden) return;
-    if (avg > 26 && quality > 0.5) { quality = Math.max(0.5, quality * 0.8); perf.good = 0; fit(); }
-    else if (avg < 15 && quality < 1 && ++perf.good >= 3) { quality = Math.min(1, quality / 0.8); perf.good = 0; fit(); }
+    if (document.hidden || nowMs - perf.born < 3000) return;
+    if (avg > 33 && quality > 0.75) { quality = Math.max(0.75, quality * 0.85); perf.good = 0; fit(); }
+    else if (avg < 20 && quality < 1 && ++perf.good >= 3) { quality = Math.min(1, quality / 0.85); perf.good = 0; fit(); }
   }
 
   // ── 每帧 ────────────────────────────────────────────────────────
@@ -309,13 +315,13 @@ export function arena(host) {
   function wake() {
     if (sound.ready) return;
     sound.unlock();
-    setTimeout(() => { sound.ambient(!sound.muted && !playing); paintSound(); }, 50);
+    setTimeout(paintSound, 50);
   }
   soundBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (!sound.ready) { sound.unlock(); sound.setMuted(false); }
     else sound.setMuted(!sound.muted);
-    setTimeout(() => { sound.ambient(!sound.muted); paintSound(); }, 50);
+    setTimeout(paintSound, 50);
   });
   root.addEventListener('pointerdown', wake);
   paintSound();
@@ -348,7 +354,12 @@ export function arena(host) {
       if (events.includes('first')) sound.play('cheer', 0.3, 1.8);
       if (events.includes('newTop')) sound.play('fanfare');
       if (events.includes('newBottom')) sound.play('sadTrombone');
-      if (events.includes('enter')) { sound.play('whoosh', true, 0.7, 0.2); sound.play('cheer', 0.25, 0.8); }
+      if (events.includes('enter')) { sound.play('whoosh', true, 0.3, 0.3); sound.play('cheer', 0.25, 0.8); }
+      // 每次行情刷新轻轻响一声，开着页面就知道"又更新了"：大盘涨大调、跌小调
+      else if (!events.length && kind === 'live') {
+        const spx = d.indices.find((i) => i.symbol === '^GSPC');
+        sound.play('chime', (spx?.pct ?? 0) >= 0);
+      }
     }
     $('wait').hidden = true;
     renderHud(d);
@@ -367,7 +378,6 @@ export function arena(host) {
     unsubscribe();
     finishRecording();
     drawer.destroy();
-    sound.ambient(false);
     window.removeEventListener('resize', fit);
     window.removeEventListener('keydown', onKey);
     document.body.classList.remove('arena-mode');
