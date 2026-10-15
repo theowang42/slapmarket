@@ -15,3 +15,11 @@ npm start   # → http://localhost:5173
 快捷键：`1`–`4` 切页 · `R` 强制刷新 · `T` 白天 / 夜间 · `Esc` 返回
 
 自选在总览右上角「编辑」里增删，存在 `data/watchlist.json`。其他配置见 `config.js`。
+
+```
+server.js        路由 + 缓存
+config.js        所有可改的配置
+lib/             cnbc 行情 · holdings 成分股 · market-hours 交易时段 · watchlist 自选 · xlsx
+public/js/       store 数据 · router · chrome 顶栏 · chart K 线 · widgets 小部件 · fmt · dom
+public/views/    overview · symbol · earnings · breadth · macro
+```

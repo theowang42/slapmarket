@@ -1,5 +1,5 @@
 import { subscribe, refresh } from './store.js';
-import { toast } from './ui.js';
+import { toast } from './dom.js';
 
 /**
  * 顶栏。交易时段、美东时间、全市场涨跌家数——都是跟视图无关的全市场信息，
@@ -39,8 +39,14 @@ function render(d) {
   $('et').textContent = `ET ${date}${s.etTime}`;
   $('et').title = y ? `美东时间 ${y} 年 ${Number(m)} 月 ${Number(dd)} 日` : '';
 
-  const b = d.breadth;
-  const t = Math.max(1, b.up + b.down + b.flat);
+  // 全部成分股的涨跌家数。比指数诚实——指数被几只大票拉起来的时候，这里会露馅
+  const all = d.sectors.flatMap((s) => s.stocks);
+  const b = {
+    up: all.filter((q) => q.pct > 0).length,
+    down: all.filter((q) => q.pct < 0).length,
+    flat: all.filter((q) => q.pct === 0).length,
+  };
+  const t = Math.max(1, all.length);
   $('breadth').innerHTML = `
     <span class="up">${b.up}</span>
     <span class="breadth-bar">

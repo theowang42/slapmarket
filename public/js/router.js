@@ -40,6 +40,4 @@ export function createRouter({ host, routes, fallback = '/' }) {
 
   window.addEventListener('hashchange', apply);
   apply();
-
-  return { navigate: (path) => { location.hash = path; } };
 }

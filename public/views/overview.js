@@ -1,7 +1,7 @@
-import { fmtPrice, fmtPct, fmtChg, dirClass } from '../js/fmt.js';
+import { fmtPrice, fmtPct, fmtChg, fmtVol, dirClass, dirColor, etToday } from '../js/fmt.js';
 import { subscribe, refresh } from '../js/store.js';
-import { sparkSvg } from '../js/spark.js';
-import { toast } from '../js/ui.js';
+import { sparkSvg, divBar, rangeBar, quoteFlags, extHours } from '../js/widgets.js';
+import { toast } from '../js/dom.js';
 
 // ── 骨架 ──────────────────────────────────────────────────────
 // 自选是主角，占主区。板块和异动退到侧栏当背景信息。
@@ -23,52 +23,12 @@ const SHELL = `
         <div class="panel-head"><h2>板块排行</h2><span class="hint">SPDR 行业 ETF</span></div>
         <div class="sectors" id="sectors"></div>
       </section>
-      <section class="panel side-panel movers-panel">
+      <section class="panel">
         <div class="panel-head"><h2>今日异动</h2><span class="hint">全部成分股</span></div>
         <div class="movers" id="movers"></div>
       </section>
     </aside>
   </main>`;
-
-const fmtVol = (v) => v == null ? '—'
-  : v >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : `${(v / 1e3).toFixed(0)}K`;
-
-/** 美东今天的日期，算"几天后出财报"用。跟顶栏一样以美东为准，不看本机时区。 */
-const etToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
-const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
-
-/**
- * 一条区间条：左端低、右端高，竖线是现价。
- * 高低缺一个就不画——画一条没有端点的条只会误导。
- */
-function rangeBar(label, lo, hi, last) {
-  if (lo == null || hi == null || hi <= lo || last == null) return '';
-  const pos = Math.max(0, Math.min(100, ((last - lo) / (hi - lo)) * 100));
-  return `
-    <div class="wc-range">
-      <span class="wc-range-k">${label}</span>
-      <span class="wc-range-lo num">${fmtPrice(lo)}</span>
-      <span class="wc-track"><i style="left:${pos.toFixed(1)}%"></i></span>
-      <span class="wc-range-hi num">${fmtPrice(hi)}</span>
-    </div>`;
-}
-
-/** 卡片右上角的标签：近期财报、贴着 52 周高低。只挑跟"今天要不要多看一眼"有关的。 */
-function cardFlags(q, today) {
-  const out = [];
-  const e = q.earnings;
-  if (e?.date) {
-    const n = daysBetween(today, e.date);
-    if (n >= 0 && n <= 14) {
-      const when = e.when === 'B' ? '盘前' : e.when === 'A' ? '盘后' : '';
-      const day = n === 0 ? '今天' : n === 1 ? '明天' : `${Number(e.date.slice(5, 7))}/${Number(e.date.slice(8))}`;
-      out.push(`<span class="flag warn" title="${e.est ? '日期为预估，未经公司确认' : ''}">财报 ${day}${when}${e.est ? '?' : ''}</span>`);
-    }
-  }
-  if (q.yrHi != null && q.last >= q.yrHi) out.push('<span class="flag up">52 周新高</span>');
-  else if (q.yrLo != null && q.last <= q.yrLo) out.push('<span class="flag down">52 周新低</span>');
-  return out.join('');
-}
 
 // ── 视图 ──────────────────────────────────────────────────────
 export function overview(host) {
@@ -80,7 +40,6 @@ export function overview(host) {
   function renderIndices(d) {
     $('indices').innerHTML = d.indices.map((ix, n) => {
       const cls = dirClass(ix.pct, ix.invert);
-      const stroke = cls === 'up' ? 'var(--up)' : cls === 'down' ? 'var(--down)' : 'var(--text-3)';
       return `
         <div class="idx fade-in" data-sym="${ix.symbol}" style="animation-delay:${n * 45}ms">
           <div class="idx-name">${ix.name}</div>
@@ -89,7 +48,7 @@ export function overview(host) {
             <span class="idx-chg num ${cls}">${fmtPct(ix.pct)}</span>
           </div>
           <div class="idx-sub num">${fmtChg(ix.change)}</div>
-          ${sparkSvg({ pts: ix.spark, prev: ix.prev, stroke, gid: `g${n}` })}
+          ${sparkSvg({ pts: ix.spark, prev: ix.prev, stroke: dirColor(cls), gid: `g${n}` })}
         </div>`;
     }).join('');
   }
@@ -97,18 +56,12 @@ export function overview(host) {
   function renderSectors(d) {
     const max = Math.max(0.35, ...d.sectors.map((s) => Math.abs(s.pct)));
     const sorted = [...d.sectors].sort((a, b) => b.pct - a.pct);
-    $('sectors').innerHTML = sorted.map((s) => {
-      const cls = dirClass(s.pct);
-      const wPct = (Math.abs(s.pct) / max) * 50;
-      const left = s.pct >= 0 ? 50 : 50 - wPct;
-      const color = cls === 'up' ? 'var(--up)' : cls === 'down' ? 'var(--down)' : 'var(--text-3)';
-      return `
-        <div class="srow" data-sector="${s.key}" title="${s.etf}">
-          <span class="srow-name">${s.name}</span>
-          <span class="srow-track"><i class="srow-fill" style="left:${left}%;width:${wPct}%;background:${color};opacity:.85"></i></span>
-          <span class="srow-pct num ${cls}">${fmtPct(s.pct)}</span>
-        </div>`;
-    }).join('');
+    $('sectors').innerHTML = sorted.map((s) => `
+      <div class="srow" title="${s.etf}">
+        <span class="srow-name">${s.name}</span>
+        ${divBar(s.pct, max)}
+        <span class="srow-pct num ${dirClass(s.pct)}">${fmtPct(s.pct)}</span>
+      </div>`).join('');
   }
 
   function renderMovers(d) {
@@ -128,27 +81,24 @@ export function overview(host) {
 
   function watchCard(q, i, today) {
     const cls = dirClass(q.pct);
-    const stroke = cls === 'up' ? 'var(--up)' : cls === 'down' ? 'var(--down)' : 'var(--text-3)';
-    const ext = q.ext && q.ext.pct != null && q.status !== 'REG_MKT'
-      ? `<span class="wc-ext">${q.ext.type === 'PRE_MKT' ? '盘前' : '盘后'} <b class="num">${fmtPrice(q.ext.last)}</b> <b class="num ${dirClass(q.ext.pct)}">${fmtPct(q.ext.pct)}</b></span>`
-      : '';
+    const ext = extHours(q);
     // 量比是"到现在为止"的成交量对 10 日均量，盘中会一路涨上去。早盘就过 100% 才值得注意
     const volPct = q.volume != null && q.avgVol ? (q.volume / q.avgVol) * 100 : null;
     // 一行四段：身份 | 价格 | 分时（吃掉剩余宽度）| 区间和成交量
     return `
       <div class="wcard fade-in${editing ? ' is-editing' : ''}" data-sym="${q.symbol}" style="animation-delay:${i * 30}ms">
-        ${editing ? `<button class="wrow-del" data-del="${q.symbol}" title="移除 ${q.symbol}">×</button>` : ''}
+        ${editing ? `<button class="wc-del" data-del="${q.symbol}" title="移除 ${q.symbol}">×</button>` : ''}
         <div class="wc-id">
           <span class="wc-sym">${q.symbol}</span>
           <span class="wc-name" title="${q.name}">${q.name}</span>
-          <span class="wc-flags">${cardFlags(q, today)}</span>
+          <span class="wc-flags">${quoteFlags(q, today)}</span>
         </div>
         <div class="wc-px">
           <span class="wc-last num">${fmtPrice(q.last)}</span>
           <span class="wc-chg num ${cls}">${fmtChg(q.change)}&nbsp;&nbsp;${fmtPct(q.pct)}</span>
-          ${ext}
+          ${ext ? `<span class="wc-ext">${ext}</span>` : ''}
         </div>
-        ${sparkSvg({ pts: q.spark, prev: q.prev, stroke, w: 600, h: 56, gid: `w${i}`, cls: 'wc-spark' })}
+        ${sparkSvg({ pts: q.spark, prev: q.prev, stroke: dirColor(cls), w: 600, h: 56, gid: `w${i}`, cls: 'wc-spark' })}
         <div class="wc-stats">
           ${rangeBar('日内', q.dayLo, q.dayHi, q.last)}
           ${rangeBar('52 周', q.yrLo, q.yrHi, q.last)}

@@ -1,8 +1,8 @@
-import { fmtPrice, fmtPct, fmtChg, fmtCap, dirClass } from '../js/fmt.js';
+import { fmtPrice, fmtPct, fmtChg, fmtCap, fmtVol, dirClass, etToday } from '../js/fmt.js';
 import { subscribe, snapshot } from '../js/store.js';
-import { onResize } from '../js/dom.js';
-import { drawChart, fmtFullTime, fmtVol } from '../js/chart.js';
-import { toast } from '../js/ui.js';
+import { onResize, toast } from '../js/dom.js';
+import { drawChart, fmtFullTime } from '../js/chart.js';
+import { divBar, quoteFlags, extHours } from '../js/widgets.js';
 
 const RANGES = ['1D', '5D', '1M', '3M', '6M', '1Y', '5Y', 'ALL'];
 const RANGE_LABEL = { '1D': '当日', '5D': '5日', '1M': '1月', '3M': '3月', '6M': '6月', '1Y': '1年', '5Y': '5年', ALL: '全部' };
@@ -58,10 +58,10 @@ function metricRows(q) {
     ['Beta', n(q.beta)], ['ROE', n(q.roe, 1, '%')],
     ['毛利率', n(q.grossMargin, 1, '%')], ['净利率', n(q.netMargin, 1, '%')],
     ['负债/权益', n(q.debtToEquity, 1, '%')], ['营收 TTM', cap(q.revenueTTM)],
-    ['市值', cap(q.cap)], ['10 日均量', q.avgVol10d ? fmtVol(q.avgVol10d) : '—'],
-    ['今开', fmtPrice(q.open)], ['最高', fmtPrice(q.high)],
+    ['市值', cap(q.cap)], ['10 日均量', q.avgVol ? fmtVol(q.avgVol) : '—'],
+    ['今开', fmtPrice(q.open)], ['最高', fmtPrice(q.dayHi)],
     // 指数不报成交量，给的是 0——同样别拿 0 冒充数据
-    ['最低', fmtPrice(q.low)], ['成交量', q.volume ? fmtVol(q.volume) : '—'],
+    ['最低', fmtPrice(q.dayLo)], ['成交量', q.volume ? fmtVol(q.volume) : '—'],
   ];
 }
 
@@ -98,21 +98,12 @@ export function symbol(host, { sym }) {
     $('sym-chg').className = `sym-chg num ${cls}`;
     $('sym-chg').textContent = `${fmtChg(q.change)} (${fmtPct(q.pct)})`;
 
-    const ext = q.ext && q.ext.pct != null && q.status !== 'REG_MKT'
-      ? `${q.ext.type === 'PRE_MKT' ? '盘前' : '盘后'} ${fmtPrice(q.ext.last)} <b class="${dirClass(q.ext.pct)}">${fmtPct(q.ext.pct)}</b>` : '';
-    $('sym-ext').innerHTML = ext;
+    $('sym-ext').innerHTML = extHours(q);
 
     const e = q.events ?? {};
-    const flags = [];
-    if (e.halted) flags.push('<span class="flag warn">停牌</span>');
-    if (e.atYrHi) flags.push('<span class="flag up">创 52 周新高</span>');
-    if (e.atYrLo) flags.push('<span class="flag down">创 52 周新低</span>');
-    if (e.earningsDate) {
-      const when = e.earningsWhen === 'A' ? '盘后' : e.earningsWhen === 'B' ? '盘前' : '';
-      flags.push(`<span class="flag">财报 ${e.earningsDate}${when ? ` ${when}` : ''}</span>`);
-    }
-    if (e.exDivDate && e.divAmount) flags.push(`<span class="flag">除息 ${e.exDivDate} $${e.divAmount}</span>`);
-    $('sym-flags').innerHTML = flags.join('');
+    $('sym-flags').innerHTML = (e.halted ? '<span class="flag warn">停牌</span>' : '')
+      + quoteFlags(q, etToday())
+      + (e.exDivDate && e.divAmount ? `<span class="flag">除息 ${e.exDivDate} $${e.divAmount}</span>` : '');
   }
 
   function renderMetrics(q) {
@@ -142,25 +133,19 @@ export function symbol(host, { sym }) {
   function renderPeers() {
     const s = peerSector();
     if (!s) {
-      $('peers').innerHTML = '<span class="hint">不在热力图成分股里</span>';
+      $('peers').innerHTML = '<span class="hint">不在标普 500 成分股里</span>';
       $('peer-hint').textContent = '';
       return;
     }
     $('peer-hint').textContent = `${s.name} ${fmtPct(s.pct)}`;
     const rows = [...s.stocks].sort((a, b) => b.pct - a.pct);
     const max = Math.max(0.35, ...rows.map((x) => Math.abs(x.pct)));
-    // 这里补上了热力图的失真：板块里画不下的那些，在这张表里都在
-    $('peers').innerHTML = rows.map((x) => {
-      const cls = dirClass(x.pct);
-      const w = (Math.abs(x.pct) / max) * 50;
-      const left = x.pct >= 0 ? 50 : 50 - w;
-      const color = cls === 'up' ? 'var(--up)' : cls === 'down' ? 'var(--down)' : 'var(--text-3)';
-      return `<div class="peer${x.symbol === sym ? ' is-self' : ''}" data-sym="${x.symbol}">
+    $('peers').innerHTML = rows.map((x) => `
+      <div class="peer${x.symbol === sym ? ' is-self' : ''}" data-sym="${x.symbol}">
         <span class="peer-sym">${x.symbol}</span>
-        <span class="srow-track"><i class="srow-fill" style="left:${left}%;width:${w}%;background:${color};opacity:.85"></i></span>
-        <span class="peer-pct num ${cls}">${fmtPct(x.pct)}</span>
-      </div>`;
-    }).join('');
+        ${divBar(x.pct, max)}
+        <span class="peer-pct num ${dirClass(x.pct)}">${fmtPct(x.pct)}</span>
+      </div>`).join('');
   }
 
   function renderAll() {

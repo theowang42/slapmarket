@@ -1,4 +1,4 @@
-import { fmtPct, fmtCap, fmtPrice, dirClass } from '../js/fmt.js';
+import { fmtPct, fmtCap, fmtPrice, dirClass, etToday, daysBetween } from '../js/fmt.js';
 import { subscribe } from '../js/store.js';
 
 /** 往后看多少天。两周够安排事情了，再长就成噪音。 */
@@ -15,22 +15,12 @@ const SHELL = `
 
 const WEEKDAY = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
-/** 'YYYY-MM-DD' → 本地 Date（当天零点）。别用 new Date(str)，那个按 UTC 解析会差一天。 */
-function parseDay(s) {
-  const [y, m, d] = s.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-
-const todayStart = () => {
-  const t = new Date();
-  return new Date(t.getFullYear(), t.getMonth(), t.getDate());
-};
-
-function dayLabel(date, offset) {
+/** 'YYYY-MM-DD' + 距今天数 → "今天" / "明天" / "10月20日 周二" */
+function dayLabel(key, offset) {
   if (offset === 0) return '今天';
   if (offset === 1) return '明天';
-  const md = `${date.getMonth() + 1}月${date.getDate()}日`;
-  return `${md} ${WEEKDAY[date.getDay()]}`;
+  const d = new Date(`${key}T00:00:00Z`);
+  return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日 ${WEEKDAY[d.getUTCDay()]}`;
 }
 
 export function earnings(host) {
@@ -45,15 +35,13 @@ export function earnings(host) {
     }
     for (const q of d.watchlist) if (!seen.has(q.symbol)) seen.set(q.symbol, { ...q, sector: '自选' });
 
-    const t0 = todayStart();
-    const end = new Date(t0);
-    end.setDate(end.getDate() + DAYS);
+    const today = etToday();
 
     const byDay = new Map();
     for (const q of seen.values()) {
       if (!q.earnings?.date) continue;
-      const day = parseDay(q.earnings.date);
-      if (day < t0 || day >= end) continue;
+      const offset = daysBetween(today, q.earnings.date);
+      if (offset < 0 || offset >= DAYS) continue;
       if (!byDay.has(q.earnings.date)) byDay.set(q.earnings.date, []);
       byDay.get(q.earnings.date).push(q);
     }
@@ -67,14 +55,13 @@ export function earnings(host) {
     if (!days.length) { $('cal').innerHTML = '<div class="cal-empty">未来两周没有成分股公布财报。</div>'; return; }
 
     $('cal').innerHTML = days.map((key) => {
-      const date = parseDay(key);
-      const offset = Math.round((date - t0) / 86400000);
+      const offset = daysBetween(today, key);
       // 大票排前面——同一天出财报，市值大的那家才是能带动指数的
       const rows = byDay.get(key).sort((a, b) => (b.cap ?? 0) - (a.cap ?? 0));
       return `
         <div class="cal-day">
           <div class="cal-date${offset === 0 ? ' is-today' : ''}">
-            <b>${dayLabel(date, offset)}</b><span>${rows.length} 家</span>
+            <b>${dayLabel(key, offset)}</b><span>${rows.length} 家</span>
           </div>
           ${rows.map((q) => {
             const when = q.earnings.when === 'A' ? '盘后' : q.earnings.when === 'B' ? '盘前' : '';

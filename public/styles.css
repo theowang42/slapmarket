@@ -257,7 +257,6 @@ body {
   cursor: default;
 }
 .srow:hover { background: var(--hover); }
-.srow.muted { opacity: .3; }
 .srow-name { font-size: 11.5px; color: var(--text); white-space: nowrap; }
 .srow-pct { font-size: 11.5px; text-align: right; }
 
@@ -384,7 +383,7 @@ body {
 .watch-edit:hover { color: var(--text-2); background: var(--hover); }
 .watch-edit.on { color: var(--text); background: var(--panel-2); border-color: var(--line-strong); }
 
-.wrow-del {
+.wc-del {
   align-self: center;
   width: 15px; height: 15px;
   padding: 0; line-height: 1;
@@ -395,28 +394,9 @@ body {
   font-size: 12px;
   cursor: pointer;
 }
-.wrow-del:hover { color: var(--down); border-color: var(--down); }
+.wc-del:hover { color: var(--down); border-color: var(--down); }
 
-/* ── 悬浮提示 / toast ───────────────────────────────────────── */
-.tip {
-  position: fixed;
-  z-index: 50;
-  pointer-events: none;
-  background: var(--float);
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  padding: 8px 10px;
-  font-size: 11.5px;
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(8px);
-  min-width: 132px;
-}
-.tip-sym { font-weight: 600; letter-spacing: .02em; }
-.tip-name { color: var(--text-3); font-size: 10.5px; margin-top: 1px; max-width: 190px; }
-.tip-grid { display: grid; grid-template-columns: auto auto; gap: 2px 12px; margin-top: 6px; font-family: var(--mono); font-size: 11px; }
-.tip-grid span { color: var(--text-3); }
-.tip-grid b { font-weight: 400; text-align: right; }
-
+/* ── toast ───────────────────────────────────────── */
 .toast {
   position: fixed;
   left: 50%; bottom: 22px;
@@ -718,7 +698,7 @@ body {
 @media (max-width: 1180px) {
   .main, .sym-main { grid-template-columns: minmax(0, 1fr) 250px; }
   .indices { grid-template-columns: repeat(3, 1fr); }
-  .indices > :nth-child(n+4) { grid-column: span 1; }
+  .bd-stats { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 860px) {
@@ -729,7 +709,7 @@ body {
   .watch-panel { min-height: 60vh; }
   /* 窄屏：分时线换到第二行横跨全宽，区间收起 */
   .wcard, .wcard.is-editing { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
-  .wcard .wrow-del { position: absolute; top: 8px; right: 8px; }
+  .wcard .wc-del { position: absolute; top: 8px; right: 8px; }
   .wc-px { align-items: flex-end; }
   .wc-spark { grid-column: 1 / -1; }
   .wc-stats { display: none; }
@@ -747,8 +727,4 @@ body {
   .bd-main > .panel { min-height: 46vh; }
   .macro-row { grid-template-columns: 84px 1fr 74px; }
   .macro-spark { display: none; }
-}
-
-@media (max-width: 1180px) {
-  .bd-stats { grid-template-columns: repeat(2, 1fr); }
 }

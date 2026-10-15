@@ -28,3 +28,13 @@ export function fitCanvas(canvas) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { ctx, w, h };
 }
+
+/** 全局提示条。挂在 index.html 的静态外壳上，不随视图切换消失。 */
+let toastTimer;
+export function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 2200);
+}

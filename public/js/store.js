@@ -1,4 +1,4 @@
-import { toast } from './ui.js';
+import { toast } from './dom.js';
 
 /**
  * /api/overview 的单一数据源。

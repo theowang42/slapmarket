@@ -1,7 +1,7 @@
-import { fmtPrice, fmtPct, dirClass } from '../js/fmt.js';
-import { sparkSvg } from '../js/spark.js';
+import { fmtPrice, fmtPct, dirClass, dirColor } from '../js/fmt.js';
+import { sparkSvg } from '../js/widgets.js';
 import { subscribe } from '../js/store.js';
-import { toast } from '../js/ui.js';
+import { toast } from '../js/dom.js';
 
 /**
  * 宏观。自己打 /api/macro，但轮询节奏借总览的 store——
@@ -38,14 +38,13 @@ export function macro(host) {
             // 收益率涨跌只表示方向，不代表"好"——债券涨跌对股票的含义要看语境，
             // 所以这里只按方向着色，不做 invert 之类的判断
             const cls = dirClass(g.bp ? i.bp : i.pct);
-            const stroke = cls === 'up' ? 'var(--up)' : cls === 'down' ? 'var(--down)' : 'var(--text-3)';
             const chg = g.bp ? fmtBp(i.bp) : fmtPct(i.pct);
             return `
               <div class="macro-row" data-sym="${i.symbol}" title="${i.symbol}">
                 <span class="macro-name">${i.name}</span>
                 <span class="macro-last num">${fmtLevel(i.last)}${g.bp ? '<em>%</em>' : ''}</span>
                 <span class="macro-chg num ${cls}">${chg}</span>
-                ${sparkSvg({ pts: i.spark, prev: i.prev, stroke, w: 240, h: 34, gid: `m${g.key}${n}`, cls: 'macro-spark' })}
+                ${sparkSvg({ pts: i.spark, prev: i.prev, stroke: dirColor(cls), w: 240, h: 34, gid: `m${g.key}${n}`, cls: 'macro-spark' })}
               </div>`;
           }).join('')}
         </div>

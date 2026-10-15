@@ -25,12 +25,11 @@ function fmtAxisTime(time, intraday) {
   if (intraday) return `${s.slice(8, 10)}:${s.slice(10, 12)}`;
   return `${s.slice(0, 4)}-${s.slice(4, 6)}`;
 }
-const fmtFullTime = (time, intraday) => {
+export const fmtFullTime = (time, intraday) => {
   const s = String(time);
   const d = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
   return intraday ? `${d} ${s.slice(8, 10)}:${s.slice(10, 12)}` : d;
 };
-const fmtVol = (v) => v >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(v);
 
 /**
  * 画一次。返回一个 { hitTest } —— 交给调用方做十字线。
@@ -173,4 +172,3 @@ export function drawChart(canvas, { bars, intraday, prevClose, hover = null }) {
   };
 }
 
-export { fmtFullTime, fmtVol };
