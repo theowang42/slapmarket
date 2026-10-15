@@ -11,8 +11,10 @@
  * `data/watchlist.json`。这份名单只在那个文件还不存在时用一次。
  * 想推倒重来：删掉 data/watchlist.json，重启即回到这里的名单。
  */
+// 美股市值前十，按 2026-10 中旬的市值排序
 export const WATCHLIST = [
-  'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO',
+  'NVDA', 'AAPL', 'GOOGL', 'MSFT', 'AMZN',
+  'SPCX', 'META', 'AVGO', 'TSLA', 'BRK.B',
 ];
 
 /** 顶部大盘指数。invert 表示"涨=市场变差"，配色会反过来。 */
