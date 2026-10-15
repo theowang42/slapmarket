@@ -363,7 +363,7 @@ export function roundRect(ctx, x, y, w, h, r) {
 }
 
 /** 颜色提亮 / 压暗。amt > 0 变亮 */
-export function shade(hex, amt) {
+function shade(hex, amt) {
   const n = parseInt(hex.slice(1), 16);
   const f = (c) => Math.round(amt >= 0 ? c + (255 - c) * amt : c * (1 + amt));
   return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;

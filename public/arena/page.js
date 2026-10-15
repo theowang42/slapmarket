@@ -1,15 +1,15 @@
-import { subscribe } from '../js/store.js';
+import { subscribe, refresh } from '../js/store.js';
 import { toast } from '../js/dom.js';
 import { fmtPrice, fmtPct, fmtCap, fmtVol, dirClass, dirColor } from '../js/fmt.js';
 import { sparkSvg, rangeBar } from '../js/widgets.js';
-import { W, H, buildCast } from '../arena/cast.js';
-import { drawFrame, DURATION, cues } from '../arena/show.js';
-import { sound } from '../arena/sound.js';
-import { LiveStage } from '../arena/live.js';
-import { createDrawer } from '../arena/drawer.js';
+import { W, H, buildCast } from './cast.js';
+import { drawFrame, DURATION, cues } from './show.js';
+import { sound } from './sound.js';
+import { LiveStage } from './live.js';
+import { createDrawer } from './drawer.js';
 
 /**
- * 首页。平时是实时舞台：台前站着涨跌幅前十，跟着行情走；悬停看详情，点了右边滑出盘面。
+ * 整个网站就这一页。平时是实时舞台：台前站着涨跌幅前十，跟着行情走；悬停看详情，点了右边滑出盘面。
  * 「收盘大戏」随时可以演，页面开着时美股一收盘也会自动演一遍。
  */
 
@@ -23,16 +23,14 @@ const SHELL = `
       <button id="sound" title="声音开关"></button>
       <button id="replay" title="空格">▶ 收盘大戏</button>
       <button id="record" title="录下整场大戏，下载成视频">⏺ 录视频</button>
-      <a href="#/board">看盘 →</a>
     </div>
     <div class="arena-wait" id="wait">等行情…</div>
   </div>`;
 
 const WEEKDAY = { Mon: '周一', Tue: '周二', Wed: '周三', Thu: '周四', Fri: '周五', Sat: '周六', Sun: '周日' };
 
-export function arena(host) {
+export function mountArena(host) {
   host.innerHTML = SHELL;
-  document.body.classList.add('arena-mode');
   const $ = (id) => host.querySelector(`#${id}`);
   const root = host.querySelector('.arena');
   const canvas = $('stage');
@@ -168,7 +166,8 @@ export function arena(host) {
     const hit = detail.get(sym);
     if (hit && Date.now() - hit.at < 20_000) return hit.d;
     const d = await (await fetch(`/api/symbol?s=${encodeURIComponent(sym)}&range=1D`)).json();
-    if (!d.error) detail.set(sym, { at: Date.now(), d });
+    if (d.error) throw new Error(d.error);
+    detail.set(sym, { at: Date.now(), d });
     return d;
   }
 
@@ -222,13 +221,14 @@ export function arena(host) {
     if (!info) return hideTip();
     const key = `${h.kind}:${h.sym ?? h.index}`;
     tipFor = key;
+    // d：undefined = 还在拉，null = 拉失败了，对象 = 拉到了
     const body = (d) => {
       const q = d?.quote;
       const pct = q?.pct ?? info.pct, last = q?.last ?? info.last;
       const cls = dirClass(pct);
       const spark = d?.bars?.length
         ? sparkSvg({ pts: d.bars.map((b) => b.c), prev: q.prev, stroke: dirColor(cls), w: 260, h: 46, gid: 'tipg', cls: 'tip-spark' })
-        : '<div class="tip-spark tip-loading">分时加载中…</div>';
+        : `<div class="tip-spark tip-loading">${d === undefined ? '分时加载中…' : '暂时拿不到分时'}</div>`;
       const volPct = q?.volume && q?.avgVol ? `${((q.volume / q.avgVol) * 100).toFixed(0)}%` : '—';
       return `
         <div class="tip-head">${info.head}</div>
@@ -243,11 +243,9 @@ export function arena(host) {
     tip.innerHTML = body(detail.get(info.sym)?.d);
     tip.hidden = false;
     placeTip(ev);
-    try {
-      const d = await details(info.sym);
-      // 内容变高了，重新摆一下，别被屏幕底边切掉
-      if (tipFor === key && !tip.hidden) { tip.innerHTML = body(d); placeTip(lastEv ?? ev); }
-    } catch { /* 卡片上的分时拿不到就算了，基本信息已经在了 */ }
+    // 拉不到就明说，别一直挂着"加载中"。内容变高了要重新摆一下，别被屏幕底边切掉
+    const d = await details(info.sym).catch(() => null);
+    if (tipFor === key && !tip.hidden) { tip.innerHTML = body(d); placeTip(lastEv ?? ev); }
   }
 
   canvas.addEventListener('mousemove', (ev) => {
@@ -286,7 +284,7 @@ export function arena(host) {
   // ── 状态栏 ──────────────────────────────────────────────────────
   function renderHud(d) {
     const s = d.session ?? {};
-    const spx = d.indices.find((i) => i.symbol === '^GSPC');
+    const spx = d.market;
     const all = d.sectors.flatMap((x) => x.stocks);
     const up = all.filter((x) => x.pct > 0).length, down = all.filter((x) => x.pct < 0).length;
     const [, m, dd] = (s.etDate ?? '').split('-');
@@ -303,6 +301,7 @@ export function arena(host) {
     if (e.target.closest?.('input')) return;
     wake();
     if (e.code === 'Space') { e.preventDefault(); play(); }
+    if (e.key === 'r' || e.key === 'R') { toast('强制刷新中…'); refresh({ force: true }); }
     if (e.key === 'Escape' && drawer.open) closeDrawer();
   };
   window.addEventListener('keydown', onKey);
@@ -357,8 +356,7 @@ export function arena(host) {
       if (events.includes('enter')) { sound.play('whoosh', true, 0.3, 0.3); sound.play('cheer', 0.25, 0.8); }
       // 每次行情刷新轻轻响一声，开着页面就知道"又更新了"：大盘涨大调、跌小调
       else if (!events.length && kind === 'live') {
-        const spx = d.indices.find((i) => i.symbol === '^GSPC');
-        sound.play('chime', (spx?.pct ?? 0) >= 0);
+        sound.play('chime', (d.market?.pct ?? 0) >= 0);
       }
     }
     $('wait').hidden = true;
@@ -380,7 +378,6 @@ export function arena(host) {
     drawer.destroy();
     window.removeEventListener('resize', fit);
     window.removeEventListener('keydown', onKey);
-    document.body.classList.remove('arena-mode');
     delete window.__arena;
   };
 }

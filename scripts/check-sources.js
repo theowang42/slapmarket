@@ -1,41 +1,35 @@
 // 数据源自检：npm run check
-// 分别问 Yahoo 和新浪同几只票，把关键字段并排打出来。两边对不上，说明某家改了格式。
+// 逐项试一遍每家数据源的每个接口，打出通没通、花了多久、拿到了什么。
+// 页面上哪块空了，先跑这个看是哪一路断了。
 
 import * as yahoo from '../lib/providers/yahoo.js';
 import * as sina from '../lib/providers/sina.js';
 
-const SYMBOLS = ['NVDA', 'BRK-B', '^GSPC'];
-const FIELDS = ['name', 'last', 'prev', 'pct', 'dayHi', 'dayLo', 'yrHi', 'yrLo', 'volume', 'avgVol', 'cap'];
+const STOCK = 'NVDA', INDEX = '^GSPC';
 
-async function timed(label, fn) {
+async function check(label, fn, show) {
   const t = Date.now();
   try {
     const v = await fn();
-    console.log(`✅ ${label}  ${Date.now() - t}ms`);
-    return v;
+    console.log(`✅ ${label.padEnd(18)} ${String(Date.now() - t).padStart(5)}ms  ${show(v)}`);
   } catch (e) {
-    console.log(`❌ ${label}  ${e.message}`);
-    return null;
+    console.log(`❌ ${label.padEnd(18)} ${String(Date.now() - t).padStart(5)}ms  ${e.message}`);
   }
 }
 
-const y = await timed('Yahoo 报价', () => yahoo.quotes(SYMBOLS)) ?? {};
-const s = await timed('新浪报价', () => sina.quotes(SYMBOLS)) ?? {};
-const d = await timed('Yahoo 基本面 NVDA', () => yahoo.details('NVDA'));
-const b = await timed('Yahoo 当日分时 NVDA', () => yahoo.bars('NVDA', '1D'));
-const k = await timed('Yahoo 日线 NVDA', () => yahoo.bars('NVDA', '1Y'));
+const px = (q) => (q ? `${q.symbol} ${q.last} (${q.pct >= 0 ? '+' : ''}${q.pct?.toFixed(2)}%)` : '没拿到');
+const bars = (b) => (b.length ? `${b.length} 根，最后一根 ${b.at(-1).time} 收 ${b.at(-1).c}` : '空的');
 
-for (const sym of SYMBOLS) {
-  console.log(`\n── ${sym}`);
-  const rows = FIELDS.map((f) => {
-    const a = y[sym]?.[f], c = s[sym]?.[f];
-    // 两边都是数字且差超过 2%，标出来——多半是新浪的字段位置挪了
-    const off = typeof a === 'number' && typeof c === 'number' && Math.abs(a - c) / Math.abs(a || 1) > 0.02;
-    return { 字段: f, Yahoo: a ?? '—', 新浪: c ?? '—', '': off ? '⚠️ 差异大' : '' };
-  });
-  console.table(rows);
-}
+console.log('\n新浪（股票和三大指数的报价，K 线备用）');
+await check('报价 个股', async () => (await sina.quotes([STOCK]))[STOCK], px);
+await check('报价 指数', async () => (await sina.quotes([INDEX]))[INDEX], px);
+await check('K 线 当日分时', () => sina.bars(STOCK, '1D'), bars);
+await check('K 线 一年日线', () => sina.bars(STOCK, '1Y'), bars);
 
-if (d) console.log('\n基本面 NVDA：', d);
-if (b?.length) console.log(`\n当日分时 ${b.length} 根，最后一根：`, b.at(-1));
-if (k?.length) console.log(`日线 ${k.length} 根，最后一根：`, k.at(-1));
+console.log('\nYahoo（K 线首选，VIX / 罗素这类新浪没有的报价，个股基本面）');
+await check('报价 VIX', async () => (await yahoo.quotes(['^VIX']))['^VIX'], px);
+await check('K 线 当日分时', () => yahoo.bars(STOCK, '1D'), bars);
+await check('K 线 一年日线', () => yahoo.bars(STOCK, '1Y'), bars);
+await check('基本面（要 crumb）', () => yahoo.details(STOCK), (d) => `市盈率 ${d.pe ?? '—'}，ROE ${d.roe?.toFixed(1) ?? '—'}%`);
+
+console.log('\n页面需要的是：报价至少一家通，K 线至少一家通。基本面不通只是盘面里几格显示 —。\n');

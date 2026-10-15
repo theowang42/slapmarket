@@ -5,32 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>美股打屁股大会 · slapmarket</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%231c1233'/><g fill='%23ff4d5e' transform='rotate(-16 16 18)'><ellipse cx='15.5' cy='21' rx='7.2' ry='7'/><rect x='7.6' y='8.6' width='3.4' height='11' rx='1.7'/><rect x='11.8' y='5.6' width='3.4' height='12' rx='1.7'/><rect x='16' y='5.8' width='3.4' height='12' rx='1.7'/><rect x='20.1' y='8.4' width='3.2' height='10.5' rx='1.6'/><rect x='21.5' y='17.5' width='3.2' height='8.5' rx='1.6' transform='rotate(-48 23 21.5)'/></g></svg>">
-  <!-- 放在样式表前同步执行：等模块脚本加载完再切主题，夜间用户每次打开都会先闪一下白屏 -->
-  <script>try { if (localStorage.getItem('ump:theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch {}</script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app">
-    <header class="bar">
-      <div class="bar-left">
-        <span class="wordmark">slap<span class="wordmark-dim">market</span></span>
-        <nav class="nav" id="nav"></nav>
-        <span class="pill" id="session"><i class="dot"></i><span class="pill-label">连接中</span></span>
-        <span class="et" id="et"></span>
-      </div>
-      <div class="bar-right">
-        <div class="breadth" id="breadth" title="成分股涨跌家数"></div>
-        <span class="meta" id="meta">加载中…</span>
-        <button class="theme-btn" id="theme" title="切换白天 / 夜间（快捷键 T）"></button>
-      </div>
-    </header>
-
-    <!-- 视图挂载点。路由只换这里，顶栏常驻。 -->
-    <div id="view"></div>
-  </div>
-
+  <main id="app"></main>
   <div class="toast" id="toast" hidden></div>
-
   <script type="module" src="app.js"></script>
 </body>
 </html>

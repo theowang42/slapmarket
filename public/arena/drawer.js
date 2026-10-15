@@ -31,8 +31,7 @@ const SHELL = `
   </div>
   <div class="dr-chart"><canvas></canvas></div>
   <div class="dr-members" data-f="members"></div>
-  <div class="kv" data-f="kv"></div>
-  <a class="dr-more" data-f="more">在看盘中打开 →</a>`;
+  <div class="kv" data-f="kv"></div>`;
 
 export function createDrawer(root, { onPick }) {
   root.innerHTML = SHELL;
@@ -64,7 +63,6 @@ export function createDrawer(root, { onPick }) {
     $('ext').innerHTML = extHours(q);
     $('flags').innerHTML = quoteFlags(q, etToday());
     $('kv').innerHTML = metricRows(q).map(([k, v]) => `<span class="kv-k">${k}</span><b class="kv-v num">${v}</b>`).join('');
-    $('more').href = `#/s/${encodeURIComponent(q.symbol)}`;
     paint();
   }
 

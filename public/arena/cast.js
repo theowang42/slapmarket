@@ -50,7 +50,7 @@ export function buildCast(data) {
   gainers.forEach((p, i) => { p.role = 'gainer'; p.rank = i + 1; });
   losers.forEach((p, i) => { if (!p.role) { p.role = 'loser'; p.rank = i + 1; } });
 
-  const market = data.indices.find((i) => i.symbol === '^GSPC');
+  const market = data.market;
   const capOf = (s) => s.stocks.reduce((a, x) => a + (x.cap ?? 0), 0);
   const big = [...data.sectors].sort((a, b) => capOf(b) - capOf(a)).slice(0, 4);
   const statues = [
