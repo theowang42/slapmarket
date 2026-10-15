@@ -1,6 +1,7 @@
 import { createRouter } from './js/router.js';
 import { mountChrome } from './js/chrome.js';
 import { start } from './js/store.js';
+import { arena } from './views/arena.js';
 import { overview } from './views/overview.js';
 import { symbol } from './views/symbol.js';
 import { earnings } from './views/earnings.js';
@@ -13,7 +14,8 @@ mountChrome();
 createRouter({
   host: document.getElementById('view'),
   routes: {
-    '/': overview,
+    '/': arena,
+    '/board': overview,
     '/earnings': earnings,
     '/breadth': breadth,
     '/macro': macro,

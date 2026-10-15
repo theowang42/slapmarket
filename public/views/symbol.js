@@ -217,7 +217,7 @@ export function symbol(host, { sym }) {
     hover = null; paint(); $('readout').textContent = '';
   });
 
-  const back = () => { location.hash = '#/'; };
+  const back = () => { location.hash = '#/board'; };
   host.querySelector('.sym-back').addEventListener('click', back);
   const onKey = (ev) => { if (ev.key === 'Escape') back(); };
   window.addEventListener('keydown', onKey);

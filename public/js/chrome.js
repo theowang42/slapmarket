@@ -15,7 +15,8 @@ const WEEKDAY = { Mon: '周一', Tue: '周二', Wed: '周三', Thu: '周四', Fr
  * 停在它上面时导航不高亮任何一项。
  */
 const NAV = [
-  { hash: '#/', label: '总览' },
+  { hash: '#/', label: '大会' },
+  { hash: '#/board', label: '看盘' },
   { hash: '#/earnings', label: '财报' },
   { hash: '#/breadth', label: '宽度' },
   { hash: '#/macro', label: '宏观' },
