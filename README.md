@@ -19,9 +19,10 @@ npm start   # → http://localhost:5173
 ```
 server.js        路由 + 缓存
 config.js        所有可改的配置
-lib/             market-data 行情入口（providers/ 下 yahoo 主、sina 备）· holdings 成分股 ·
-                 market-hours 交易时段 · watchlist 自选 · xlsx
+lib/             market-data 行情入口（providers/ 下 yahoo 主、sina 备）· holdings 标普 500 成分股 ·
+                 flock 离群算法 · baselines 离群基线 · market-hours 交易时段 · watchlist 自选 · xlsx
 scripts/         check-sources 数据源自检
+tests/           npm test
 public/js/       store 数据 · router · chrome 顶栏 · chart K 线 · widgets 小部件 · fmt · dom
 public/views/    overview · symbol · earnings · breadth · macro
 ```

@@ -6,7 +6,9 @@ import {
   WATCHLIST, INDICES, SECTORS, MACRO, CACHE_TTL, PORT, HOST, HOLDINGS_TTL_HOURS, MARKET_CLOSURES,
 } from './config.js';
 import { fetchQuotes, fetchDetails, fetchBars, fetchSpark, RANGES } from './lib/market-data.js';
-import { getHoldings } from './lib/holdings.js';
+import { getHoldings, recentChanges } from './lib/holdings.js';
+import { getBaselines } from './lib/baselines.js';
+import { score } from './lib/flock.js';
 import { marketSession } from './lib/market-hours.js';
 import { getWatchlist, setWatchlist, normalize as normalizeWatch, MAX as WATCH_MAX } from './lib/watchlist.js';
 
@@ -91,6 +93,44 @@ async function overview({ force }) {
   return { ...q, indices: q.indices.map(withSpark), watchlist: q.watchlist.map(withSpark) };
 }
 
+// ── 离群：标普 500 里今天谁有"自己的事" ───────────────────────────
+/**
+ * 两层：板块相对大盘、个股相对自己的板块。今天的涨跌直接用总览那份报价
+ * （同一个缓存），不多打上游；只有基线是额外算的，一天一次。
+ */
+async function buildFlock() {
+  const holdings = await getHoldings(SECTORS, { ttlHours: HOLDINGS_TTL_HOURS });
+  const { baseline, progress } = await getBaselines(holdings);
+  // 第一次还在算 → 给进度；算失败了在冷却 → 说清楚，别让前端一直转圈
+  if (!baseline) return progress ? { status: 'warming', progress } : { status: 'unavailable' };
+
+  const q = await cached('quotes', CACHE_TTL.quotes, buildQuotes);
+  const market = q.indices.find((i) => i.symbol === '^GSPC')?.pct ?? null;
+
+  const sectors = q.sectors.map((s) => ({
+    key: s.key, name: s.name, etf: s.etf, pct: s.pct,
+    ...score(s.pct, market, baseline.sectors[s.etf]),
+  }));
+  const sectorPct = Object.fromEntries(q.sectors.map((s) => [s.etf, s.pct]));
+
+  const stocks = q.sectors.flatMap((s) => s.stocks.map((x) => ({
+    symbol: x.symbol, name: x.name, sector: s.key, pct: x.pct, cap: x.cap,
+    ...score(x.pct, sectorPct[s.etf], baseline.stocks[x.symbol]),
+  })))
+    .filter((x) => x.z != null)                      // 新进来、还没有基线的票先不算
+    .sort((a, b) => Math.abs(b.z) - Math.abs(a.z));
+
+  return {
+    status: 'ready',
+    baselineAt: baseline.computedAt,
+    market,
+    sectors,
+    stocks,
+    changes: (await recentChanges()).slice(0, 5),
+    refreshing: progress,                            // 基线过期在后台重算时不为空
+  };
+}
+
 // ── 宏观 ──────────────────────────────────────────────────────────
 /**
  * 收益率那组要额外给 bp：接口的 change_pct 是"收益率这个数字涨了百分之多少"，
@@ -171,6 +211,7 @@ const API = {
     return overview({ force });
   },
   'GET /api/live': () => cached('live', CACHE_TTL.live, buildLive),
+  'GET /api/flock': buildFlock,
   'GET /api/macro': async (url) => {
     if (url.searchParams.has('force')) cache.delete('macro');
     return { groups: await cached('macro', CACHE_TTL.quotes, buildMacro) };

@@ -5,3 +5,6 @@ node_modules/
 # 初始名单在 config.js 的 WATCHLIST 里。
 # （data/holdings.json 相反，它要提交：首次启动、SSGA 又连不上时的兜底。）
 data/watchlist.json
+
+# 离群算法的基线，每天从行情重新算，不用提交
+data/baselines.json
