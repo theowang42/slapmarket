@@ -54,7 +54,25 @@ function render(d) {
   $('meta').textContent = `更新 ${at} · 延迟约 15 分钟 · R 刷新`;
 }
 
+// ── 白天 / 夜间。默认白天，选了夜间就记住。 ──────────────────
+const isDark = () => document.documentElement.dataset.theme === 'dark';
+
+function paintThemeBtn() {
+  $('theme').textContent = isDark() ? '白天' : '夜间';
+}
+
+function toggleTheme() {
+  const dark = !isDark();
+  if (dark) document.documentElement.dataset.theme = 'dark';
+  else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem('ump:theme', dark ? 'dark' : 'light'); } catch {}
+  paintThemeBtn();
+  window.dispatchEvent(new Event('themechange'));
+}
+
 export function mountChrome() {
+  paintThemeBtn();
+  $('theme').addEventListener('click', toggleTheme);
   subscribe(render);
   renderNav();
   window.addEventListener('hashchange', renderNav);
@@ -65,6 +83,7 @@ export function mountChrome() {
     if (e.target instanceof Element && e.target.closest('input, textarea')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;      // 别抢 Cmd+R 这类浏览器快捷键
     if (e.key === 'r' || e.key === 'R') { toast('强制刷新中…'); refresh({ force: true }); return; }
+    if (e.key === 't' || e.key === 'T') { toggleTheme(); return; }
     const n = Number(e.key);
     if (n >= 1 && n <= NAV.length) location.hash = NAV[n - 1].hash;
   });

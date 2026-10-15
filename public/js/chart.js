@@ -116,7 +116,7 @@ export function drawChart(canvas, { bars, intraday, prevClose, hover = null }) {
   if (intraday && prevClose != null) {
     ctx.save();
     ctx.setLineDash([2, 3]);
-    ctx.strokeStyle = 'rgba(255,255,255,.22)';
+    ctx.strokeStyle = css('--guide');
     ctx.beginPath(); ctx.moveTo(plot.x, Y(prevClose)); ctx.lineTo(plot.x + plot.w, Y(prevClose)); ctx.stroke();
     ctx.restore();
   }
@@ -155,7 +155,7 @@ export function drawChart(canvas, { bars, intraday, prevClose, hover = null }) {
     const b = bars[hover];
     const x = X(hover), y = Y(b.c);
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,.28)';
+    ctx.strokeStyle = css('--guide-strong');
     ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(x, plot.y); ctx.lineTo(x, plot.y + plot.h); ctx.stroke();
     ctx.restore();

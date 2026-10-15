@@ -503,7 +503,7 @@ const server = http.createServer(async (req, res) => {
 const LOOPBACK = ['127.0.0.1', 'localhost', '::1'];
 
 server.listen(PORT, HOST, () => {
-  console.log(`\n  US Market Pulse  →  http://localhost:${PORT}`);
+  console.log(`\n  us-market-pulse  →  http://localhost:${PORT}`);
   // 暴露到局域网是个有后果的选择（自选是可写的），得让人看见自己选了什么
   if (!LOOPBACK.includes(HOST)) {
     console.log(`  ⚠️  正在监听 ${HOST}——局域网内任何人都能访问，且能修改自选\n`);

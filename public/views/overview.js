@@ -134,28 +134,28 @@ export function overview(host) {
       : '';
     // 量比是"到现在为止"的成交量对 10 日均量，盘中会一路涨上去。早盘就过 100% 才值得注意
     const volPct = q.volume != null && q.avgVol ? (q.volume / q.avgVol) * 100 : null;
+    // 一行四段：身份 | 价格 | 分时（吃掉剩余宽度）| 区间和成交量
     return `
       <div class="wcard fade-in${editing ? ' is-editing' : ''}" data-sym="${q.symbol}" style="animation-delay:${i * 30}ms">
         ${editing ? `<button class="wrow-del" data-del="${q.symbol}" title="移除 ${q.symbol}">×</button>` : ''}
-        <div class="wc-head">
+        <div class="wc-id">
           <span class="wc-sym">${q.symbol}</span>
           <span class="wc-name" title="${q.name}">${q.name}</span>
           <span class="wc-flags">${cardFlags(q, today)}</span>
         </div>
         <div class="wc-px">
           <span class="wc-last num">${fmtPrice(q.last)}</span>
-          <span class="wc-chg num ${cls}">${fmtChg(q.change)}</span>
-          <span class="wc-pct num ${cls}">${fmtPct(q.pct)}</span>
+          <span class="wc-chg num ${cls}">${fmtChg(q.change)}&nbsp;&nbsp;${fmtPct(q.pct)}</span>
+          ${ext}
         </div>
-        ${ext}
-        ${sparkSvg({ pts: q.spark, prev: q.prev, stroke, w: 300, h: 52, gid: `w${i}`, cls: 'wc-spark' })}
-        <div class="wc-ranges">
+        ${sparkSvg({ pts: q.spark, prev: q.prev, stroke, w: 600, h: 56, gid: `w${i}`, cls: 'wc-spark' })}
+        <div class="wc-stats">
           ${rangeBar('日内', q.dayLo, q.dayHi, q.last)}
           ${rangeBar('52 周', q.yrLo, q.yrHi, q.last)}
-        </div>
-        <div class="wc-foot num">
-          <span>成交 ${fmtVol(q.volume)}</span>
-          ${volPct != null ? `<span class="${volPct >= 150 ? 'wc-hot' : ''}">10 日均量的 ${volPct.toFixed(0)}%</span>` : ''}
+          <div class="wc-vol num">
+            <span>成交 ${fmtVol(q.volume)}</span>
+            ${volPct != null ? `<span class="${volPct >= 150 ? 'wc-hot' : ''}">均量 ${volPct.toFixed(0)}%</span>` : ''}
+          </div>
         </div>
       </div>`;
   }
@@ -167,7 +167,7 @@ export function overview(host) {
 
     // 表单而不是裸 input：回车提交是浏览器自带的，不用自己听键盘
     const adder = editing
-      ? `<form class="wcard wc-add" id="watch-add" autocomplete="off">
+      ? `<form class="wc-add" id="watch-add" autocomplete="off">
            <input id="watch-input" placeholder="加代码，回车确认" maxlength="12" spellcheck="false">
          </form>`
       : '';
